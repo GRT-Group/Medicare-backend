@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { friendlyMessage } from '@/lib/api-error'
+import { apiError, friendlyMessage } from '@/lib/api-error'
 import { OrganizationTypeService } from '@/services/organization-type.service'
 
 export async function GET(req: NextRequest) {
@@ -12,17 +12,14 @@ export async function GET(req: NextRequest) {
       if (!organizationType) {
         return NextResponse.json({ success: false, error: 'Organization Type not found' }, { status: 404 })
       }
-      return NextResponse.json({ success: true, data: organizationType })
+      return NextResponse.json({ success: true, data: JSON.parse(JSON.stringify(organizationType, (k, v) => typeof v === 'bigint' ? v.toString() : v)) })
     }
 
     // Otherwise fetch all organization types
     const organizationTypes = await OrganizationTypeService.getAllOrganizationTypes()
-    return NextResponse.json({ success: true, data: organizationTypes })
+    return NextResponse.json({ success: true, data: JSON.parse(JSON.stringify(organizationTypes, (k, v) => typeof v === 'bigint' ? v.toString() : v)) })
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: friendlyMessage(error) },
-      { status: 500 }
-    )
+    return apiError(error)
   }
 }
 
@@ -45,7 +42,8 @@ export async function POST(req: NextRequest) {
       status: status || 'ACTIVE',
     })
 
-    return NextResponse.json({ success: true, data: organizationType }, { status: 201 })
+    const serialized = JSON.parse(JSON.stringify(organizationType, (_, v) => typeof v === 'bigint' ? v.toString() : v))
+    return NextResponse.json({ success: true, data: serialized }, { status: 201 })
   } catch (error: any) {
     // Handle Prisma unique constraint error
     if (error.code === 'P2002') {
@@ -72,7 +70,8 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const organizationType = await OrganizationTypeService.updateOrganizationType(id, body)
     
-    return NextResponse.json({ success: true, data: organizationType })
+    const serialized = JSON.parse(JSON.stringify(organizationType, (_, v) => typeof v === 'bigint' ? v.toString() : v))
+    return NextResponse.json({ success: true, data: serialized })
   } catch (error: any) {
     if (error.code === 'P2025') {
       return NextResponse.json({ success: false, error: 'Organization Type not found' }, { status: 404 })

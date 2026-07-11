@@ -13,7 +13,8 @@ export async function GET() {
       SubscriptionPlanService.getAllPlans(),
       SubscriptionPlanService.getAllDiscountRules(),
     ]);
-    return NextResponse.json({ plans, discounts }, { status: 200 });
+    const serialized = JSON.parse(JSON.stringify({ plans, discounts }, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+    return NextResponse.json(serialized, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: friendlyMessage(error) }, { status: 500 });
   }
