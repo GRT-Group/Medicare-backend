@@ -1,0 +1,1925 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AuditLog {
+  id                                BigInt       @id @default(autoincrement())
+  organization_id                   BigInt
+  user_id                           BigInt
+  action                            String
+  table_affected                    String
+  record_id                         String
+  status                            String       @default("ACTIVE")
+  timestamp                         DateTime     @default(now())
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  branch_id                         BigInt?
+  after                             Json?
+  before                            Json?
+  module                            String?
+  browser_info                      String?
+  device_info                       String?
+  ip_address                        String?
+  request_id                        String?
+  Branch                            Branch?      @relation(fields: [branch_id], references: [id])
+  User_AuditLog_deleted_by_idToUser User?        @relation("AuditLog_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                      Organization @relation(fields: [organization_id], references: [id])
+  User_AuditLog_user_idToUser       User         @relation("AuditLog_user_idToUser", fields: [user_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AuditLog_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model Branch {
+  id                                                 BigInt              @id @default(autoincrement())
+  organization_id                                    BigInt
+  name                                               String
+  location                                           String?
+  contact_info                                       String?
+  is_main                                            Boolean             @default(false)
+  status                                             String              @default("ACTIVE")
+  created_at                                         DateTime            @default(now())
+  updated_at                                         DateTime            @updatedAt
+  deleted_by_id                                      BigInt?
+  deleted_at                                         DateTime?
+  is_deleted                                         Boolean             @default(false)
+  restore_allowed                                    Boolean             @default(true)
+  AuditLog                                           AuditLog[]
+  User_Branch_deleted_by_idToUser                    User?               @relation("Branch_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                                       Organization        @relation(fields: [organization_id], references: [id])
+  CashSession                                        CashSession[]
+  Cashbook                                           Cashbook[]
+  InventoryMovement                                  InventoryMovement[]
+  Return                                             Return[]
+  Sale                                               Sale[]
+  Quotation                                          Quotation[]
+  StockTransfer_StockTransfer_from_branch_idToBranch StockTransfer[]     @relation("StockTransfer_from_branch_idToBranch")
+  StockTransfer_StockTransfer_to_branch_idToBranch   StockTransfer[]     @relation("StockTransfer_to_branch_idToBranch")
+  User_User_branch_idToBranch                        User[]              @relation("User_branch_idToBranch")
+  ActivityLog                                        ActivityLog[]
+  DiscountRequest                                    DiscountRequest[]
+  NotificationEvent                                  NotificationEvent[]
+}
+
+model CashSession {
+  id                                   BigInt            @id @default(autoincrement())
+  organization_id                      BigInt
+  branch_id                            BigInt?
+  user_id                              BigInt
+  opening_balance                      Decimal           @db.Decimal(15, 2)
+  closing_balance                      Decimal?          @db.Decimal(15, 2)
+  expected_balance                     Decimal?          @db.Decimal(15, 2)
+  difference                           Decimal?          @db.Decimal(15, 2)
+  status                               CashSessionStatus @default(OPEN)
+  opened_at                            DateTime          @default(now())
+  closed_at                            DateTime?
+  deleted_by_id                        BigInt?
+  deleted_at                           DateTime?
+  is_deleted                           Boolean           @default(false)
+  restore_allowed                      Boolean           @default(true)
+  closed_by_id                         BigInt?
+  Branch                               Branch?           @relation(fields: [branch_id], references: [id])
+  User_CashSession_deleted_by_idToUser User?             @relation("CashSession_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  User_CashSession_closed_by_idToUser  User?             @relation("CashSession_closed_by_idToUser", fields: [closed_by_id], references: [id])
+  Organization                         Organization      @relation(fields: [organization_id], references: [id])
+  User_CashSession_user_idToUser       User              @relation("CashSession_user_idToUser", fields: [user_id], references: [id])
+  Sale                                 Sale[]
+}
+
+model CashSession_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Cashbook {
+  id                                BigInt          @id @default(autoincrement())
+  organization_id                   BigInt
+  transaction_type                  TransactionType
+  category                          String
+  amount                            Decimal         @db.Decimal(15, 2)
+  description                       String?
+  reference_id                      String?
+  status                            String          @default("ACTIVE")
+  created_by_id                     BigInt?
+  date                              DateTime        @default(now())
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  branch_id                         BigInt?
+  is_deleted                        Boolean         @default(false)
+  restore_allowed                   Boolean         @default(true)
+  Branch                            Branch?         @relation(fields: [branch_id], references: [id])
+  User_Cashbook_created_by_idToUser User?           @relation("Cashbook_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Cashbook_deleted_by_idToUser User?           @relation("Cashbook_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                      Organization    @relation(fields: [organization_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Cashbook_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Category {
+  id                                BigInt       @id @default(autoincrement())
+  organization_id                   BigInt
+  product_type_id                   BigInt
+  name                              String
+  status                            String       @default("ACTIVE")
+  created_by_id                     BigInt?
+  updated_at                        DateTime     @updatedAt
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  is_deleted                        Boolean      @default(false)
+  restore_allowed                   Boolean      @default(true)
+  User_Category_created_by_idToUser User?        @relation("Category_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Category_deleted_by_idToUser User?        @relation("Category_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                      Organization @relation(fields: [organization_id], references: [id])
+  ProductType                       ProductType  @relation(fields: [product_type_id], references: [id])
+  Product                           Product[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Category_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+enum CustomerTypeEnum {
+  Individual
+  Farmer
+  Cooperative
+  Company
+  Vet_Clinic  @map("Vet Clinic")
+}
+
+enum CustomerStatusEnum {
+  Active
+  Inactive
+  Blacklisted
+}
+
+enum CustomerCreditStatus {
+  Active
+  Suspended
+}
+
+model Customer {
+  id                                BigInt               @id @default(autoincrement())
+  organization_id                   BigInt
+  /// Auto-generated human-readable identifier, e.g. "CUS-000001".
+  customer_code                     String?              @unique
+  name                              String
+  phone                             String?
+  email                             String?
+  /// Kept for backward compatibility with the single-line address callers
+  /// already send; province/district/sector are the new structured fields.
+  address                           String?
+  tax_id                            String?
+  province                          String?
+  district                          String?
+  sector                            String?
+  /// Number of credit days allowed (0, 7, 15, 30, 60, ...).
+  payment_terms                     Int                  @default(0)
+  credit_status                     CustomerCreditStatus @default(Active)
+  notes                             String?
+  customer_type_v2                  CustomerTypeEnum     @default(Individual)
+  loyalty_points                    Int                  @default(0)
+  credit_limit                      Decimal              @default(0) @db.Decimal(18, 2)
+  current_balance                   Decimal              @default(0) @db.Decimal(15, 2)
+  status_v2                         CustomerStatusEnum   @default(Active)
+  created_by_id                     BigInt?
+  updated_by_id                     BigInt?
+  created_at                        DateTime             @default(now())
+  updated_at                        DateTime             @updatedAt
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  metadata                          Json?
+  is_deleted                        Boolean              @default(false)
+  restore_allowed                   Boolean              @default(true)
+  // Legacy free-text fields, kept (not dropped) so existing code/data isn't
+  // broken; customer_type_v2/status_v2 are the new enum-backed fields per
+  // spec. New code should read/write the _v2 fields.
+  customer_type                     String               @default("RETAIL")
+  status                            String               @default("ACTIVE")
+  User_Customer_created_by_idToUser User?                @relation("Customer_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Customer_updated_by_idToUser User?                @relation("Customer_updated_by_idToUser", fields: [updated_by_id], references: [id])
+  User_Customer_deleted_by_idToUser User?                @relation("Customer_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                      Organization         @relation(fields: [organization_id], references: [id])
+  CustomerPayment                   CustomerPayment[]
+  Sale                              Sale[]
+  Quotation                         Quotation[]
+}
+
+model CustomerPayment {
+  id                                       BigInt        @id @default(autoincrement())
+  organization_id                          BigInt
+  customer_id                              BigInt
+  amount                                   Decimal       @db.Decimal(15, 2)
+  payment_method                           PaymentMethod @default(CASH)
+  reference                                String?
+  status                                   String        @default("ACTIVE")
+  created_by_id                            BigInt
+  timestamp                                DateTime      @default(now())
+  deleted_by_id                            BigInt?
+  deleted_at                               DateTime?
+  is_deleted                               Boolean       @default(false)
+  restore_allowed                          Boolean       @default(true)
+  User_CustomerPayment_created_by_idToUser User          @relation("CustomerPayment_created_by_idToUser", fields: [created_by_id], references: [id])
+  Customer                                 Customer      @relation(fields: [customer_id], references: [id])
+  User_CustomerPayment_deleted_by_idToUser User?         @relation("CustomerPayment_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                             Organization  @relation(fields: [organization_id], references: [id])
+}
+
+model CustomerPayment_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Customer_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model DiscountRule {
+  id                  BigInt    @id @default(autoincrement())
+  months              Int       @unique
+  discount_percentage Decimal   @db.Decimal(5, 2)
+  status              String    @default("ACTIVE")
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_by_id       BigInt?
+  deleted_at          DateTime?
+  is_deleted          Boolean   @default(false)
+  restore_allowed     Boolean   @default(true)
+  User                User?     @relation(fields: [deleted_by_id], references: [id])
+}
+
+model DiscountRule_RecycleBin {
+  id              BigInt   @id
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  organization_id BigInt
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model InventoryMovement {
+  id                                         BigInt                @id @default(autoincrement())
+  organization_id                            BigInt
+  product_id                                 BigInt
+  batch_id                                   BigInt
+  movement_type_id                           String
+  quantity                                   Int
+  reference_id                               String?
+  status                                     String                @default("ACTIVE")
+  created_by_id                              BigInt
+  timestamp                                  DateTime              @default(now())
+  deleted_by_id                              BigInt?
+  deleted_at                                 DateTime?
+  branch_id                                  BigInt?
+  is_deleted                                 Boolean               @default(false)
+  restore_allowed                            Boolean               @default(true)
+  type                                       InventoryMovementType @default(STOCK_ADJUSTMENT)
+  ProductBatch                               ProductBatch          @relation(fields: [batch_id], references: [id])
+  Branch                                     Branch?               @relation(fields: [branch_id], references: [id])
+  User_InventoryMovement_created_by_idToUser User                  @relation("InventoryMovement_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_InventoryMovement_deleted_by_idToUser User?                 @relation("InventoryMovement_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                               Organization          @relation(fields: [organization_id], references: [id])
+  Product                                    Product               @relation(fields: [product_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model InventoryMovement_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Organization {
+  brands                                  Brand[]
+  manufacturers                           Manufacturer[]
+  unit_of_measures                        UnitOfMeasure[]
+  tax_categories                          TaxCategory[]
+  expense_categories                      ExpenseCategory[]
+  customer_groups                         CustomerGroup[]
+  supplier_categories                     SupplierCategory[]
+  approval_workflows                      ApprovalWorkflow[]
+  activity_logs                           ActivityLog[]
+  document_attachments                    DocumentAttachment[]
+  discount_requests                       DiscountRequest[]
+  notification_events                     NotificationEvent[]
+  supplier_payments                       SupplierPayment[]
+  id                                      BigInt                @id @default(autoincrement())
+  name                                    String
+  organization_type_id                    BigInt
+  code                                    String                @unique
+  address                                 Json?
+  phone                                   String
+  email                                   String
+  country                                 String?
+  timezone                                String                @default("UTC")
+  currency                                String                @default("RWF")
+  business_license_url                    String?
+  logo_url                                String?
+  business_certificate_url                String?
+  is_approved                             Boolean               @default(false)
+  status                                  String                @default("ACTIVE")
+  created_at                              DateTime              @default(now())
+  updated_at                              DateTime              @updatedAt
+  deleted_by_id                           BigInt?
+  deleted_at                              DateTime?
+  business_unit                           String?
+  tax_id                                  String?
+  registration_number                     String?
+  license_number                          String?
+  website                                 String?
+  lifecycle_status                        OrganizationStatus    @default(PENDING_VERIFICATION)
+  is_deleted                              Boolean               @default(false)
+  restore_allowed                         Boolean               @default(true)
+  AuditLog                                AuditLog[]
+  Branch                                  Branch[]
+  CashSession                             CashSession[]
+  Cashbook                                Cashbook[]
+  Category                                Category[]
+  Customer                                Customer[]
+  CustomerPayment                         CustomerPayment[]
+  InventoryMovement                       InventoryMovement[]
+  User_Organization_deleted_by_idToUser   User?                 @relation("Organization_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  OrganizationType                        OrganizationType      @relation(fields: [organization_type_id], references: [id])
+  Product                                 Product[]
+  ProductBatch                            ProductBatch[]
+  ProductType                             ProductType[]
+  PurchaseOrder                           PurchaseOrder[]
+  Return                                  Return[]
+  RolePermission                          RolePermission[]
+  Sale                                    Sale[]
+  Quotation                               Quotation[]
+  StockTransfer                           StockTransfer[]
+  Subscription                            Subscription?
+  SubscriptionPayment                     SubscriptionPayment[]
+  Supplier                                Supplier[]
+  User_User_organization_idToOrganization User[]                @relation("User_organization_idToOrganization")
+  SupportTicket                           SupportTicket[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OrganizationType {
+  id              BigInt         @id @default(autoincrement())
+  name            String         @unique
+  description     String?
+  status          String         @default("ACTIVE")
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean        @default(false)
+  restore_allowed Boolean        @default(true)
+  Organization    Organization[]
+  User            User?          @relation(fields: [deleted_by_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model OrganizationType_RecycleBin {
+  id              BigInt   @id
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  organization_id BigInt
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Organization_RecycleBin {
+  id              BigInt   @id
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  organization_id BigInt
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Permission {
+  id             BigInt           @id @default(autoincrement())
+  action         String
+  subject        String
+  description    String?
+  status         String           @default("ACTIVE")
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @updatedAt
+  deleted_by_id  BigInt?
+  deleted_at     DateTime?
+  User           User?            @relation(fields: [deleted_by_id], references: [id])
+  RolePermission RolePermission[]
+  UserPermission UserPermission[]
+
+  @@unique([action, subject])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Permission_RecycleBin {
+  id              BigInt   @id
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  organization_id BigInt
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Product {
+  history                          ProductHistory[]
+  id                               BigInt              @id @default(autoincrement())
+  organization_id                  BigInt
+  category_id                      BigInt
+  name                             String
+  barcode                          String?
+  unit_of_measure                  String
+  image_url                        String?
+  brand_id                         BigInt?
+  base_cost                        Decimal             @default(0) @db.Decimal(15, 2)
+  base_price                       Decimal             @default(0) @db.Decimal(15, 2)
+  tax_rate                         Decimal             @default(0) @db.Decimal(5, 2)
+  reorder_level                    Int                 @default(0)
+  status                           String              @default("ACTIVE")
+  created_by_id                    BigInt?
+  updated_at                       DateTime            @updatedAt
+  deleted_by_id                    BigInt?
+  deleted_at                       DateTime?
+  is_deleted                       Boolean             @default(false)
+  restore_allowed                  Boolean             @default(true)
+  lifecycle_status                 String              @default("ACTIVE")
+  /// Agrovet department split: AGRO (crop/farm inputs) vs VET (veterinary). GENERAL
+  /// keeps every non-agrovet tenant's existing behaviour untouched.
+  department                       ProductDepartment   @default(GENERAL)
+  InventoryMovement                InventoryMovement[]
+  Category                         Category            @relation(fields: [category_id], references: [id])
+  Brand                            Brand?              @relation(fields: [brand_id], references: [id])
+  User_Product_created_by_idToUser User?               @relation("Product_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Product_deleted_by_idToUser User?               @relation("Product_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                     Organization        @relation(fields: [organization_id], references: [id])
+  ProductBatch                     ProductBatch[]
+  QuotationItem                    QuotationItem[]
+  PurchaseOrderItem                PurchaseOrderItem[]
+  Return                           Return[]
+  SaleItem                         SaleItem[]
+  StockTransferItem                StockTransferItem[]
+  ProductSupplier                  ProductSupplier[]
+}
+
+/// Links a Product to Suppliers it can be sourced from (preferred/known suppliers).
+model ProductSupplier {
+  id          BigInt   @id @default(autoincrement())
+  product_id  BigInt
+  supplier_id BigInt
+  created_at  DateTime @default(now())
+  Product     Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  Supplier    Supplier @relation(fields: [supplier_id], references: [id], onDelete: Cascade)
+
+  @@unique([product_id, supplier_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductBatch {
+  id                 BigInt              @id @default(autoincrement())
+  organization_id    BigInt
+  product_id         BigInt
+  supplier_id        BigInt?
+  batch_number       String
+  expiry_date        DateTime?
+  quantity_remaining Int                 @default(0)
+  unit_cost          Decimal             @db.Decimal(15, 2)
+  selling_price      Decimal             @db.Decimal(15, 2)
+  status             String              @default("ACTIVE")
+  updated_at         DateTime            @updatedAt
+  deleted_by_id      BigInt?
+  deleted_at         DateTime?
+  disposal_date      DateTime?
+  disposal_reason    String?
+  disposal_status    DisposalStatus      @default(NONE)
+  is_deleted         Boolean             @default(false)
+  restore_allowed    Boolean             @default(true)
+  InventoryMovement  InventoryMovement[]
+  User               User?               @relation(fields: [deleted_by_id], references: [id])
+  Organization       Organization        @relation(fields: [organization_id], references: [id])
+  Product            Product             @relation(fields: [product_id], references: [id])
+  Supplier           Supplier?           @relation(fields: [supplier_id], references: [id])
+  Return             Return[]
+  SaleItem           SaleItem[]
+  StockTransferItem  StockTransferItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductBatch_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductType {
+  id                                   BigInt       @id @default(autoincrement())
+  organization_id                      BigInt
+  name                                 String
+  status                               String       @default("ACTIVE")
+  created_by_id                        BigInt?
+  updated_at                           DateTime     @updatedAt
+  deleted_by_id                        BigInt?
+  deleted_at                           DateTime?
+  is_deleted                           Boolean      @default(false)
+  restore_allowed                      Boolean      @default(true)
+  Category                             Category[]
+  User_ProductType_created_by_idToUser User?        @relation("ProductType_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_ProductType_deleted_by_idToUser User?        @relation("ProductType_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                         Organization @relation(fields: [organization_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductType_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Product_RecycleBin {
+  id              BigInt   @id
+  organization_id BigInt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrder {
+  id                                     BigInt              @id @default(autoincrement())
+  organization_id                        BigInt
+  supplier_id                            BigInt
+  total_amount                           Decimal             @db.Decimal(15, 2)
+  invoice_document_url                   String?
+  status                                 String              @default("ACTIVE")
+  created_by_id                          BigInt
+  updated_at                             DateTime            @updatedAt
+  deleted_by_id                          BigInt?
+  deleted_at                             DateTime?
+  is_deleted                             Boolean             @default(false)
+  restore_allowed                        Boolean             @default(true)
+  actual_delivery_date                   DateTime?
+  expected_delivery_date                 DateTime?
+  User_PurchaseOrder_created_by_idToUser User                @relation("PurchaseOrder_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_PurchaseOrder_deleted_by_idToUser User?               @relation("PurchaseOrder_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                           Organization        @relation(fields: [organization_id], references: [id])
+  Supplier                               Supplier            @relation(fields: [supplier_id], references: [id])
+  PurchaseOrderItem                      PurchaseOrderItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrderItem {
+  id                BigInt        @id @default(autoincrement())
+  purchase_order_id BigInt
+  product_id        BigInt
+  expected_quantity Int
+  received_quantity Int           @default(0)
+  unit_cost         Decimal       @db.Decimal(15, 2)
+  status            String        @default("ACTIVE")
+  updated_at        DateTime      @updatedAt
+  deleted_by_id     BigInt?
+  deleted_at        DateTime?
+  is_deleted        Boolean       @default(false)
+  restore_allowed   Boolean       @default(true)
+  User              User?         @relation(fields: [deleted_by_id], references: [id])
+  Product           Product       @relation(fields: [product_id], references: [id])
+  PurchaseOrder     PurchaseOrder @relation(fields: [purchase_order_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrderItem_RecycleBin {
+  id                BigInt    @id
+  purchase_order_id BigInt?
+  product_id        BigInt?
+  expected_quantity Int?
+  received_quantity Int?
+  unit_cost         Decimal?  @db.Decimal(15, 2)
+  status            String?
+  updated_at        DateTime? @updatedAt
+  deleted_by_id     BigInt?
+  deleted_at        DateTime  @default(now())
+  original_id       BigInt?
+  snapshot          Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrder_RecycleBin {
+  id                   BigInt    @id
+  organization_id      BigInt?
+  supplier_id          BigInt?
+  total_amount         Decimal?  @db.Decimal(15, 2)
+  invoice_document_url String?
+  status               String?
+  created_by_id        BigInt?
+  updated_at           DateTime? @updatedAt
+  deleted_by_id        BigInt?
+  deleted_at           DateTime  @default(now())
+  original_id          BigInt?
+  snapshot             Json?
+}
+
+model Return {
+  id                              BigInt       @id @default(autoincrement())
+  organization_id                 BigInt
+  branch_id                       BigInt?
+  sale_id                         BigInt
+  product_id                      BigInt
+  batch_id                        BigInt
+  quantity                        Int
+  reason                          String?
+  type                            String       @default("REFUND")
+  stock_restored                  Boolean      @default(true)
+  refund_amount                   Decimal      @db.Decimal(15, 2)
+  status                          ReturnStatus @default(COMPLETED)
+  created_by_id                   BigInt
+  timestamp                       DateTime     @default(now())
+  deleted_by_id                   BigInt?
+  deleted_at                      DateTime?
+  is_deleted                      Boolean      @default(false)
+  restore_allowed                 Boolean      @default(true)
+  ProductBatch                    ProductBatch @relation(fields: [batch_id], references: [id])
+  Branch                          Branch?      @relation(fields: [branch_id], references: [id])
+  User_Return_created_by_idToUser User         @relation("Return_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Return_deleted_by_idToUser User?        @relation("Return_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                    Organization @relation(fields: [organization_id], references: [id])
+  Product                         Product      @relation(fields: [product_id], references: [id])
+  Sale                            Sale         @relation(fields: [sale_id], references: [id])
+}
+
+model Return_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  branch_id       BigInt?
+  sale_id         BigInt?
+  product_id      BigInt?
+  batch_id        BigInt?
+  quantity        Int?
+  reason          String?
+  refund_amount   Decimal?  @db.Decimal(15, 2)
+  status          String?
+  created_by_id   BigInt?
+  timestamp       DateTime?
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model RolePermission {
+  id                                      BigInt        @id @default(autoincrement())
+  role_id                                 BigInt
+  permission_id                           BigInt
+  organization_id                         BigInt?
+  status                                  String        @default("ACTIVE")
+  created_by_id                           BigInt?
+  created_at                              DateTime      @default(now())
+  updated_at                              DateTime      @updatedAt
+  deleted_by_id                           BigInt?
+  deleted_at                              DateTime?
+  is_deleted                              Boolean       @default(false)
+  restore_allowed                         Boolean       @default(true)
+  User_RolePermission_created_by_idToUser User?         @relation("RolePermission_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_RolePermission_deleted_by_idToUser User?         @relation("RolePermission_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                            Organization? @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Permission                              Permission    @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  UserRole                                UserRole      @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id, organization_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model RolePermission_RecycleBin {
+  id              BigInt    @id
+  role_id         BigInt?
+  permission_id   BigInt?
+  organization_id BigInt?
+  status          String?
+  created_by_id   BigInt?
+  created_at      DateTime?
+  updated_at      DateTime? @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Sale {
+  id                            BigInt        @id @default(autoincrement())
+  organization_id               BigInt
+  customer_id                   BigInt?
+  total_amount                  Decimal       @db.Decimal(15, 2)
+  amount_paid                   Decimal       @default(0) @db.Decimal(15, 2)
+  remaining_balance             Decimal       @default(0) @db.Decimal(15, 2)
+  due_date                      DateTime?
+  payment_method                PaymentMethod @default(CASH)
+  status                        SaleStatus    @default(COMPLETED)
+  invoice_number                String        @unique
+  receipt_document_url          String?
+  created_by_id                 BigInt
+  timestamp                     DateTime      @default(now())
+  deleted_by_id                 BigInt?
+  deleted_at                    DateTime?
+  branch_id                     BigInt?
+  is_deleted                    Boolean       @default(false)
+  restore_allowed               Boolean       @default(true)
+  /// Links a sale to the cashier shift it was rung up under (agrovet POS).
+  cash_session_id               BigInt?
+  /// Applied discount (from an approved DiscountRequest) and the resulting VAT.
+  discount_amount               Decimal       @default(0) @db.Decimal(15, 2)
+  vat_amount                    Decimal       @default(0) @db.Decimal(15, 2)
+  /// EBM (Rwanda RRA) invoice fields, populated by the EbmProvider adapter on every sale.
+  ebm_invoice_number            String?
+  ebm_receipt_data              Json?
+  ebm_status                    EbmStatus     @default(PENDING)
+  CashSession                   CashSession?  @relation(fields: [cash_session_id], references: [id])
+  Return                        Return[]
+  Branch                        Branch?       @relation(fields: [branch_id], references: [id])
+  User_Sale_created_by_idToUser User          @relation("Sale_created_by_idToUser", fields: [created_by_id], references: [id])
+  Customer                      Customer?     @relation(fields: [customer_id], references: [id])
+  User_Sale_deleted_by_idToUser User?         @relation("Sale_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                  Organization  @relation(fields: [organization_id], references: [id])
+  items                         SaleItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SaleItem {
+  id              BigInt       @id @default(autoincrement())
+  sale_id         BigInt
+  product_id      BigInt
+  batch_id        BigInt
+  quantity        Int
+  unit_price      Decimal      @db.Decimal(15, 2)
+  subtotal        Decimal      @db.Decimal(15, 2)
+  status          String       @default("ACTIVE")
+  updated_at      DateTime     @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean      @default(false)
+  restore_allowed Boolean      @default(true)
+  ProductBatch    ProductBatch @relation(fields: [batch_id], references: [id])
+  User            User?        @relation(fields: [deleted_by_id], references: [id])
+  Product         Product      @relation(fields: [product_id], references: [id])
+  Sale            Sale         @relation(fields: [sale_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SaleItem_RecycleBin {
+  id            BigInt    @id
+  sale_id       BigInt?
+  product_id    BigInt?
+  batch_id      BigInt?
+  quantity      Int?
+  unit_price    Decimal?  @db.Decimal(15, 2)
+  subtotal      Decimal?  @db.Decimal(15, 2)
+  status        String?
+  updated_at    DateTime? @updatedAt
+  deleted_by_id BigInt?
+  deleted_at    DateTime  @default(now())
+  original_id   BigInt?
+  snapshot      Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Sale_RecycleBin {
+  id                   BigInt    @id
+  organization_id      BigInt?
+  customer_id          BigInt?
+  total_amount         Decimal?  @db.Decimal(15, 2)
+  payment_method       String?
+  status               String?
+  invoice_number       String?
+  receipt_document_url String?
+  created_by_id        BigInt?
+  timestamp            DateTime?
+  deleted_by_id        BigInt?
+  deleted_at           DateTime  @default(now())
+  original_id          BigInt?
+  snapshot             Json?
+}
+
+model StockTransfer {
+  id                                     BigInt              @id @default(autoincrement())
+  organization_id                        BigInt
+  from_branch_id                         BigInt
+  to_branch_id                           BigInt
+  status                                 StockTransferStatus @default(PENDING)
+  reference                              String?
+  created_by_id                          BigInt
+  timestamp                              DateTime            @default(now())
+  deleted_by_id                          BigInt?
+  deleted_at                             DateTime?
+  is_deleted                             Boolean             @default(false)
+  restore_allowed                        Boolean             @default(true)
+  User_StockTransfer_created_by_idToUser User                @relation("StockTransfer_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_StockTransfer_deleted_by_idToUser User?               @relation("StockTransfer_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  from_branch                            Branch              @relation("StockTransfer_from_branch_idToBranch", fields: [from_branch_id], references: [id])
+  Organization                           Organization        @relation(fields: [organization_id], references: [id])
+  to_branch                              Branch              @relation("StockTransfer_to_branch_idToBranch", fields: [to_branch_id], references: [id])
+  items                                  StockTransferItem[]
+}
+
+model StockTransferItem {
+  id              BigInt        @id @default(autoincrement())
+  transfer_id     BigInt
+  product_id      BigInt
+  batch_id        BigInt
+  quantity        Int
+  status          String        @default("ACTIVE")
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean       @default(false)
+  restore_allowed Boolean       @default(true)
+  ProductBatch    ProductBatch  @relation(fields: [batch_id], references: [id])
+  User            User?         @relation(fields: [deleted_by_id], references: [id])
+  Product         Product       @relation(fields: [product_id], references: [id])
+  StockTransfer   StockTransfer @relation(fields: [transfer_id], references: [id])
+}
+
+model StockTransferItem_RecycleBin {
+  id            BigInt   @id
+  transfer_id   BigInt?
+  product_id    BigInt?
+  batch_id      BigInt?
+  quantity      Int?
+  status        String?
+  deleted_by_id BigInt?
+  deleted_at    DateTime @default(now())
+  original_id   BigInt?
+  snapshot      Json?
+}
+
+model StockTransfer_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  from_branch_id  BigInt?
+  to_branch_id    BigInt?
+  status          String?
+  reference       String?
+  created_by_id   BigInt?
+  timestamp       DateTime?
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Subscription {
+  id                                    BigInt                @id @default(autoincrement())
+  organization_id                       BigInt                @unique
+  plan_name                             String
+  status                                SubscriptionStatus    @default(ACTIVE)
+  duration_months                       Int                   @default(1)
+  start_date                            DateTime              @default(now())
+  end_date                              DateTime
+  created_by_id                         BigInt?
+  updated_at                            DateTime              @updatedAt
+  deleted_by_id                         BigInt?
+  deleted_at                            DateTime?
+  plan_id                               BigInt?
+  is_deleted                            Boolean               @default(false)
+  restore_allowed                       Boolean               @default(true)
+  User_Subscription_created_by_idToUser User?                 @relation("Subscription_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Subscription_deleted_by_idToUser User?                 @relation("Subscription_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                          Organization          @relation(fields: [organization_id], references: [id])
+  subscription_plan                     SubscriptionPlan?     @relation(fields: [plan_id], references: [id])
+  SubscriptionPayment                   SubscriptionPayment[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SubscriptionPayment {
+  id                                             BigInt        @id @default(autoincrement())
+  subscription_id                                BigInt
+  organization_id                                BigInt
+  amount                                         Decimal       @db.Decimal(15, 2)
+  payment_method                                 PaymentMethod
+  receipt_document_url                           String?
+  status                                         PaymentStatus @default(COMPLETED)
+  processed_by_id                                BigInt?
+  date                                           DateTime      @default(now())
+  deleted_by_id                                  BigInt?
+  deleted_at                                     DateTime?
+  is_deleted                                     Boolean       @default(false)
+  restore_allowed                                Boolean       @default(true)
+  // Pricing snapshot at the time this payment was created. Plans and
+  // discount rules are mutable (price changes, a rule gets deleted), so
+  // without these the admin payments table would lose the "why this
+  // amount" breakdown for historical rows. Always populated on create.
+  plan_name                                      String?
+  plan_price                                     Decimal?      @db.Decimal(15, 2)
+  months                                         Int?
+  base_amount                                    Decimal?      @db.Decimal(15, 2)
+  discount_percentage                            Decimal?      @db.Decimal(5, 2)
+  discount_amount                                Decimal?      @db.Decimal(15, 2)
+  /// MTN MoMo request-to-pay reference (our X-Reference-Id / their externalId) —
+  /// the idempotency key used to initiate the charge and to poll/webhook its status.
+  gateway_reference                              String?       @unique
+  /// Raw provider status as last observed (PENDING/SUCCESSFUL/FAILED) — kept
+  /// separate from PaymentStatus so we never lose the gateway's own wording.
+  gateway_status                                 String?
+  /// Failure reason from the provider (e.g. "NOT_ENOUGH_FUNDS"), if any.
+  gateway_reason                                 String?
+  /// Payer MSISDN the request-to-pay was sent to.
+  gateway_phone                                  String?
+  gateway_checked_at                             DateTime?
+  User_SubscriptionPayment_deleted_by_idToUser   User?         @relation("SubscriptionPayment_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                                   Organization  @relation(fields: [organization_id], references: [id])
+  User_SubscriptionPayment_processed_by_idToUser User?         @relation("SubscriptionPayment_processed_by_idToUser", fields: [processed_by_id], references: [id])
+  subscription                                   Subscription  @relation(fields: [subscription_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SubscriptionPayment_RecycleBin {
+  id                   BigInt    @id
+  subscription_id      BigInt?
+  organization_id      BigInt?
+  amount               Decimal?  @db.Decimal(15, 2)
+  payment_method       String?
+  receipt_document_url String?
+  status               String?
+  processed_by_id      BigInt?
+  date                 DateTime?
+  deleted_by_id        BigInt?
+  deleted_at           DateTime  @default(now())
+  original_id          BigInt?
+  snapshot             Json?
+}
+
+model SubscriptionPlan {
+  id              BigInt         @id @default(autoincrement())
+  name            String         @unique
+  price           Decimal        @db.Decimal(15, 2)
+  features        Json?
+  status          String         @default("ACTIVE")
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean        @default(false)
+  restore_allowed Boolean        @default(true)
+  Subscription    Subscription[]
+  User            User?          @relation(fields: [deleted_by_id], references: [id])
+}
+
+model SubscriptionPlan_RecycleBin {
+  id            BigInt    @id
+  name          String?
+  price         Decimal?  @db.Decimal(15, 2)
+  features      Json?
+  status        String?
+  created_at    DateTime?
+  updated_at    DateTime? @updatedAt
+  deleted_by_id BigInt?
+  deleted_at    DateTime  @default(now())
+  original_id   BigInt?
+  snapshot      Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Subscription_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  plan_name       String?
+  status          String?
+  duration_months Int?
+  start_date      DateTime?
+  end_date        DateTime?
+  created_by_id   BigInt?
+  updated_at      DateTime? @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  plan_id         BigInt?
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+enum SupplierTypeEnum {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum RiskLevelEnum {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Supplier {
+  id                                BigInt            @id @default(autoincrement())
+  organization_id                   BigInt
+  /// Auto-generated human-readable identifier, e.g. "SUP-000001".
+  supplier_code                     String?           @unique
+  name                              String
+  /// Legacy free-text contact blob, kept for backward compatibility;
+  /// phone/email/address are the structured fields going forward.
+  contact_info                      String?
+  phone                             String?
+  email                             String?
+  address                           String?
+  /// TIN/VAT number (both supplier types can have one).
+  tax_id                            String?
+  /// COMPANY: who to talk to at the company, and their direct line.
+  contact_person                    String?
+  contact_person_phone              String?
+  /// COMPANY: official company registration number.
+  registration_number               String?
+  /// INDIVIDUAL: national ID number.
+  national_id                       String?
+  notes                             String?
+  payment_terms                     String?
+  country                           String?
+  /// Free-text industry/category label (e.g. "Hardware", "Pharmaceuticals").
+  business_category                 String?
+  /// COMPANY: free-text size band (e.g. "Small", "Medium", "Large").
+  company_size                      String?
+  website                           String?
+  /// INDIVIDUAL: area of expertise.
+  specialization                    String?
+  /// INDIVIDUAL: free-text experience band (e.g. "1-3 years").
+  experience_level                  String?
+  preferred_payment_method          String?
+  currency                          String?          @default("RWF")
+  credit_limit                      Decimal?          @db.Decimal(15, 2)
+  lead_time_days                    Int?
+  minimum_order_value               Decimal?          @db.Decimal(15, 2)
+  delivery_availability              String?
+  internal_notes                    String?
+  outstanding_balance               Decimal           @default(0) @db.Decimal(15, 2)
+  status                            String            @default("ACTIVE")
+  supplier_type                     SupplierTypeEnum  @default(COMPANY)
+  approval_status                   ApprovalStatus    @default(APPROVED)
+  risk_level                        RiskLevelEnum     @default(LOW)
+  last_order_date                   DateTime?
+  last_contacted_at                 DateTime?
+  performance_rating                Decimal           @default(5) @db.Decimal(3, 2)
+  lead_missing                      Int               @default(0)
+  created_by_id                     BigInt?
+  updated_at                        DateTime          @updatedAt
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  is_deleted                        Boolean           @default(false)
+  restore_allowed                   Boolean           @default(true)
+  ProductBatch                      ProductBatch[]
+  PurchaseOrder                     PurchaseOrder[]
+  ProductSupplier                   ProductSupplier[]
+  SupplierPayment                   SupplierPayment[]
+  User_Supplier_created_by_idToUser User?             @relation("Supplier_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_Supplier_deleted_by_idToUser User?             @relation("Supplier_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                      Organization      @relation(fields: [organization_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Supplier_RecycleBin {
+  id                  BigInt    @id
+  organization_id     BigInt?
+  name                String?
+  contact_info        String?
+  payment_terms       String?
+  outstanding_balance Decimal?  @db.Decimal(15, 2)
+  status              String?
+  created_by_id       BigInt?
+  updated_at          DateTime? @updatedAt
+  deleted_by_id       BigInt?
+  deleted_at          DateTime  @default(now())
+  original_id         BigInt?
+  snapshot            Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model User {
+  product_histories                                             ProductHistory[]
+  approval_requests                                             ApprovalRequest[]
+  approval_steps                                                ApprovalStep[]
+  activity_logs                                                 ActivityLog[]
+  document_attachments                                          DocumentAttachment[]
+  DiscountRequest_requested_by                                  DiscountRequest[]     @relation("DiscountRequest_requested_by")
+  DiscountRequest_reviewed_by                                   DiscountRequest[]     @relation("DiscountRequest_reviewed_by")
+  SupplierPayment_created_by                                    SupplierPayment[]     @relation("SupplierPayment_created_by")
+  id                                                            BigInt                @id @default(autoincrement())
+  organization_id                                               BigInt?
+  email                                                         String                @unique
+  first_name                                                    String
+  last_name                                                     String
+  phone                                                         String?
+  role_id                                                       BigInt
+  status                                                        UserStatus            @default(ACTIVE)
+  password_hash                                                 String
+  public_id                                                     String?               @unique
+  token_version                                                 Int                   @default(0)
+  created_at                                                    DateTime              @default(now())
+  updated_at                                                    DateTime              @updatedAt
+  deleted_by_id                                                 BigInt?
+  deleted_at                                                    DateTime?
+  branch_id                                                     BigInt?
+  is_deleted                                                    Boolean               @default(false)
+  restore_allowed                                               Boolean               @default(true)
+  // Legacy notification preferences (for backward compatibility)
+  sms_notification_active                                       Boolean               @default(true)
+  email_notification_active                                     Boolean               @default(true)
+  // New separate preferences: Authentication notifications
+  auth_sms_active                                               Boolean               @default(true)
+  auth_email_active                                             Boolean               @default(true)
+  // New separate preferences: System notifications (reminders, etc.)
+  system_sms_active                                             Boolean               @default(true)
+  system_email_active                                           Boolean               @default(true)
+  AuditLog_AuditLog_deleted_by_idToUser                         AuditLog[]            @relation("AuditLog_deleted_by_idToUser")
+  AuditLog_AuditLog_user_idToUser                               AuditLog[]            @relation("AuditLog_user_idToUser")
+  Branch_Branch_deleted_by_idToUser                             Branch[]              @relation("Branch_deleted_by_idToUser")
+  CashSession_CashSession_deleted_by_idToUser                   CashSession[]         @relation("CashSession_deleted_by_idToUser")
+  CashSession_CashSession_user_idToUser                         CashSession[]         @relation("CashSession_user_idToUser")
+  CashSession_CashSession_closed_by_idToUser                    CashSession[]         @relation("CashSession_closed_by_idToUser")
+  Cashbook_Cashbook_created_by_idToUser                         Cashbook[]            @relation("Cashbook_created_by_idToUser")
+  Cashbook_Cashbook_deleted_by_idToUser                         Cashbook[]            @relation("Cashbook_deleted_by_idToUser")
+  Category_Category_created_by_idToUser                         Category[]            @relation("Category_created_by_idToUser")
+  Category_Category_deleted_by_idToUser                         Category[]            @relation("Category_deleted_by_idToUser")
+  Customer_Customer_created_by_idToUser                         Customer[]            @relation("Customer_created_by_idToUser")
+  Customer_Customer_updated_by_idToUser                         Customer[]            @relation("Customer_updated_by_idToUser")
+  Customer_Customer_deleted_by_idToUser                         Customer[]            @relation("Customer_deleted_by_idToUser")
+  CustomerPayment_CustomerPayment_created_by_idToUser           CustomerPayment[]     @relation("CustomerPayment_created_by_idToUser")
+  CustomerPayment_CustomerPayment_deleted_by_idToUser           CustomerPayment[]     @relation("CustomerPayment_deleted_by_idToUser")
+  DiscountRule                                                  DiscountRule[]
+  InventoryMovement_InventoryMovement_created_by_idToUser       InventoryMovement[]   @relation("InventoryMovement_created_by_idToUser")
+  InventoryMovement_InventoryMovement_deleted_by_idToUser       InventoryMovement[]   @relation("InventoryMovement_deleted_by_idToUser")
+  Organization_Organization_deleted_by_idToUser                 Organization[]        @relation("Organization_deleted_by_idToUser")
+  OrganizationType                                              OrganizationType[]
+  Permission                                                    Permission[]
+  Product_Product_created_by_idToUser                           Product[]             @relation("Product_created_by_idToUser")
+  Product_Product_deleted_by_idToUser                           Product[]             @relation("Product_deleted_by_idToUser")
+  ProductBatch                                                  ProductBatch[]
+  ProductType_ProductType_created_by_idToUser                   ProductType[]         @relation("ProductType_created_by_idToUser")
+  ProductType_ProductType_deleted_by_idToUser                   ProductType[]         @relation("ProductType_deleted_by_idToUser")
+  PurchaseOrder_PurchaseOrder_created_by_idToUser               PurchaseOrder[]       @relation("PurchaseOrder_created_by_idToUser")
+  PurchaseOrder_PurchaseOrder_deleted_by_idToUser               PurchaseOrder[]       @relation("PurchaseOrder_deleted_by_idToUser")
+  PurchaseOrderItem                                             PurchaseOrderItem[]
+  Return_Return_created_by_idToUser                             Return[]              @relation("Return_created_by_idToUser")
+  Return_Return_deleted_by_idToUser                             Return[]              @relation("Return_deleted_by_idToUser")
+  RolePermission_RolePermission_created_by_idToUser             RolePermission[]      @relation("RolePermission_created_by_idToUser")
+  RolePermission_RolePermission_deleted_by_idToUser             RolePermission[]      @relation("RolePermission_deleted_by_idToUser")
+  Sale_Sale_created_by_idToUser                                 Sale[]                @relation("Sale_created_by_idToUser")
+  Sale_Sale_deleted_by_idToUser                                 Sale[]                @relation("Sale_deleted_by_idToUser")
+  Quotation_Quotation_created_by_idToUser                       Quotation[]           @relation("Quotation_created_by_idToUser")
+  Quotation_Quotation_deleted_by_idToUser                       Quotation[]           @relation("Quotation_deleted_by_idToUser")
+  QuotationItem                                                 QuotationItem[]
+  SaleItem                                                      SaleItem[]
+  StockTransfer_StockTransfer_created_by_idToUser               StockTransfer[]       @relation("StockTransfer_created_by_idToUser")
+  StockTransfer_StockTransfer_deleted_by_idToUser               StockTransfer[]       @relation("StockTransfer_deleted_by_idToUser")
+  StockTransferItem                                             StockTransferItem[]
+  Subscription_Subscription_created_by_idToUser                 Subscription[]        @relation("Subscription_created_by_idToUser")
+  Subscription_Subscription_deleted_by_idToUser                 Subscription[]        @relation("Subscription_deleted_by_idToUser")
+  SubscriptionPayment_SubscriptionPayment_deleted_by_idToUser   SubscriptionPayment[] @relation("SubscriptionPayment_deleted_by_idToUser")
+  SubscriptionPayment_SubscriptionPayment_processed_by_idToUser SubscriptionPayment[] @relation("SubscriptionPayment_processed_by_idToUser")
+  SubscriptionPlan                                              SubscriptionPlan[]
+  Supplier_Supplier_created_by_idToUser                         Supplier[]            @relation("Supplier_created_by_idToUser")
+  Supplier_Supplier_deleted_by_idToUser                         Supplier[]            @relation("Supplier_deleted_by_idToUser")
+  Branch_User_branch_idToBranch                                 Branch?               @relation("User_branch_idToBranch", fields: [branch_id], references: [id])
+  User                                                          User?                 @relation("UserToUser", fields: [deleted_by_id], references: [id])
+  other_User                                                    User[]                @relation("UserToUser")
+  organization                                                  Organization?         @relation("User_organization_idToOrganization", fields: [organization_id], references: [id])
+  role                                                          UserRole              @relation("User_role_idToUserRole", fields: [role_id], references: [id])
+  UserPermission_UserPermission_assigned_by_idToUser            UserPermission[]      @relation("UserPermission_assigned_by_idToUser")
+  UserPermission_UserPermission_deleted_by_idToUser             UserPermission[]      @relation("UserPermission_deleted_by_idToUser")
+  UserPermission_UserPermission_user_idToUser                   UserPermission[]      @relation("UserPermission_user_idToUser")
+  UserRole_UserRole_deleted_by_idToUser                         UserRole[]            @relation("UserRole_deleted_by_idToUser")
+  SupportTicket_SupportTicket_created_by_idToUser               SupportTicket[]       @relation("SupportTicket_created_by_idToUser")
+  SupportTicket_SupportTicket_assigned_to_idToUser              SupportTicket[]       @relation("SupportTicket_assigned_to_idToUser")
+  SupportTicket_SupportTicket_deleted_by_idToUser               SupportTicket[]       @relation("SupportTicket_deleted_by_idToUser")
+  UserSession_UserSession_deleted_by_idToUser                   UserSession[]         @relation("UserSession_deleted_by_idToUser")
+  UserSession_UserSession_user_idToUser                         UserSession[]         @relation("UserSession_user_idToUser")
+  VerificationToken_VerificationToken_deleted_by_idToUser       VerificationToken[]   @relation("VerificationToken_deleted_by_idToUser")
+  VerificationToken_VerificationToken_user_idToUser             VerificationToken[]   @relation("VerificationToken_user_idToUser")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserPermission {
+  id                                       BigInt     @id @default(autoincrement())
+  user_id                                  BigInt
+  permission_id                            BigInt
+  is_granted                               Boolean    @default(true)
+  status                                   String     @default("ACTIVE")
+  assigned_by_id                           BigInt?
+  created_at                               DateTime   @default(now())
+  updated_at                               DateTime   @updatedAt
+  deleted_by_id                            BigInt?
+  deleted_at                               DateTime?
+  is_deleted                               Boolean    @default(false)
+  restore_allowed                          Boolean    @default(true)
+  User_UserPermission_assigned_by_idToUser User?      @relation("UserPermission_assigned_by_idToUser", fields: [assigned_by_id], references: [id])
+  User_UserPermission_deleted_by_idToUser  User?      @relation("UserPermission_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Permission                               Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  User_UserPermission_user_idToUser        User       @relation("UserPermission_user_idToUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, permission_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserPermission_RecycleBin {
+  id             BigInt    @id
+  user_id        BigInt?
+  permission_id  BigInt?
+  is_granted     Boolean?
+  status         String?
+  assigned_by_id BigInt?
+  created_at     DateTime?
+  updated_at     DateTime? @updatedAt
+  deleted_by_id  BigInt?
+  deleted_at     DateTime  @default(now())
+  original_id    BigInt?
+  snapshot       Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserRole {
+  id                                BigInt           @id @default(autoincrement())
+  name                              String           @unique
+  description                       String?
+  status                            String           @default("ACTIVE")
+  created_at                        DateTime         @default(now())
+  updated_at                        DateTime         @updatedAt
+  deleted_by_id                     BigInt?
+  deleted_at                        DateTime?
+  RolePermission                    RolePermission[]
+  users                             User[]           @relation("User_role_idToUserRole")
+  User_UserRole_deleted_by_idToUser User?            @relation("UserRole_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserRole_RecycleBin {
+  id            BigInt    @id
+  name          String?
+  description   String?
+  status        String?
+  created_at    DateTime?
+  updated_at    DateTime? @updatedAt
+  deleted_by_id BigInt?
+  deleted_at    DateTime  @default(now())
+  original_id   BigInt?
+  snapshot      Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserSession {
+  id                                   BigInt    @id @default(autoincrement())
+  user_id                              BigInt
+  organization_id                      BigInt?
+  session_token                        String?   @unique
+  expires_at                           DateTime?
+  ip_address                           String?
+  user_agent                           String?
+  status                               String    @default("ACTIVE")
+  login_at                             DateTime  @default(now())
+  logout_at                            DateTime?
+  deleted_by_id                        BigInt?
+  deleted_at                           DateTime?
+  is_deleted                           Boolean   @default(false)
+  restore_allowed                      Boolean   @default(true)
+  User_UserSession_deleted_by_idToUser User?     @relation("UserSession_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  User_UserSession_user_idToUser       User      @relation("UserSession_user_idToUser", fields: [user_id], references: [id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model UserSession_RecycleBin {
+  id              BigInt    @id
+  user_id         BigInt?
+  organization_id BigInt?
+  session_token   String?
+  ip_address      String?
+  user_agent      String?
+  status          String?
+  login_at        DateTime?
+  logout_at       DateTime?
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model User_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  email           String?
+  first_name      String?
+  last_name       String?
+  phone           String?
+  role_id         BigInt?
+  status          String?
+  password_hash   String?
+  token_version   Int?
+  created_at      DateTime?
+  updated_at      DateTime? @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model VerificationToken {
+  id                                         BigInt    @id @default(autoincrement())
+  user_id                                    BigInt
+  code                                       String
+  type                                       OTPType
+  expires_at                                 DateTime
+  is_used                                    Boolean   @default(false)
+  attempts                                   Int       @default(0)
+  status                                     String    @default("ACTIVE")
+  created_at                                 DateTime  @default(now())
+  deleted_by_id                              BigInt?
+  deleted_at                                 DateTime?
+  is_deleted                                 Boolean   @default(false)
+  restore_allowed                            Boolean   @default(true)
+  User_VerificationToken_deleted_by_idToUser User?     @relation("VerificationToken_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  User_VerificationToken_user_idToUser       User      @relation("VerificationToken_user_idToUser", fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model VerificationToken_RecycleBin {
+  id            BigInt    @id
+  user_id       BigInt?
+  code          String?
+  type          String?
+  expires_at    DateTime?
+  is_used       Boolean?
+  status        String?
+  created_at    DateTime?
+  deleted_by_id BigInt?
+  deleted_at    DateTime  @default(now())
+  original_id   BigInt?
+  snapshot      Json?
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+  DISCREPANCY
+}
+
+enum DisposalStatus {
+  NONE
+  DISPOSED
+  EXPIRED
+  DAMAGED
+}
+
+enum InventoryMovementType {
+  PURCHASE_RECEIPT
+  SALES
+  CUSTOMER_RETURN
+  SUPPLIER_RETURN
+  STOCK_TRANSFER
+  STOCK_ADJUSTMENT
+  DAMAGED_STOCK
+  EXPIRED_STOCK
+  OPENING_BALANCE
+  STOCK_COUNT_ADJUSTMENT
+  WAREHOUSE_TRANSFER
+}
+
+enum OTPType {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+  LOGIN_2FA
+}
+
+enum OrganizationStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT
+  MOMO
+  CARD
+  BANK_TRANSFER
+  MANUAL_INVOICE
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum StockTransferStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  CANCELLED
+  TRIAL
+  PENDING_APPROVAL
+}
+
+enum TransactionType {
+  IN
+  OUT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_ONBOARDING
+}
+
+model Brand {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+  Product      Product[]
+}
+
+model Manufacturer {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model UnitOfMeasure {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  abbreviation    String
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model TaxCategory {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  rate            Decimal   @db.Decimal(5, 2)
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model ExpenseCategory {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model CustomerGroup {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  description     String?
+  discount_rate   Decimal   @default(0) @db.Decimal(5, 2)
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model SupplierCategory {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  description     String?
+  status          String    @default("ACTIVE")
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+}
+
+model ProductHistory {
+  id            BigInt   @id @default(autoincrement())
+  product_id    BigInt
+  user_id       BigInt
+  field_changed String
+  old_value     String?
+  new_value     String?
+  action        String
+  timestamp     DateTime @default(now())
+
+  product Product @relation(fields: [product_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id])
+}
+
+/// Tracks a product's purchase cost over time, for cost-trend reporting.
+model ProductCostHistory {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  product_id      BigInt
+  purchase_price  Decimal  @db.Decimal(15, 2)
+  date            DateTime @default(now())
+}
+
+model ApprovalWorkflow {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  name            String
+  module          String
+  rules           Json
+  status          String   @default("ACTIVE")
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  is_deleted      Boolean  @default(false)
+  restore_allowed Boolean  @default(true)
+
+  organization Organization      @relation(fields: [organization_id], references: [id])
+  requests     ApprovalRequest[]
+}
+
+model ApprovalRequest {
+  id           BigInt         @id @default(autoincrement())
+  workflow_id  BigInt
+  requester_id BigInt
+  record_id    String
+  record_type  String
+  status       ApprovalStatus @default(PENDING)
+  comments     String?
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+
+  workflow  ApprovalWorkflow @relation(fields: [workflow_id], references: [id])
+  requester User             @relation(fields: [requester_id], references: [id])
+  steps     ApprovalStep[]
+}
+
+model ApprovalStep {
+  id           BigInt         @id @default(autoincrement())
+  request_id   BigInt
+  approver_id  BigInt
+  step_level   Int
+  status       ApprovalStatus @default(PENDING)
+  comments     String?
+  processed_at DateTime?
+
+  request  ApprovalRequest @relation(fields: [request_id], references: [id])
+  approver User            @relation(fields: [approver_id], references: [id])
+}
+
+model ActivityLog {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  branch_id       BigInt?
+  user_id         BigInt
+  action          String
+  description     String?
+  ip_address      String?
+  device_info     String?
+  browser_info    String?
+  timestamp       DateTime @default(now())
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+  branch       Branch?      @relation(fields: [branch_id], references: [id])
+  user         User         @relation(fields: [user_id], references: [id])
+}
+
+model DocumentAttachment {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  record_type     String
+  record_id       String
+  file_name       String
+  file_url        String
+  file_type       String
+  file_size       Int?
+  uploaded_by_id  BigInt
+  created_at      DateTime @default(now())
+  is_deleted      Boolean  @default(false)
+
+  organization Organization @relation(fields: [organization_id], references: [id])
+  uploaded_by  User         @relation(fields: [uploaded_by_id], references: [id])
+}
+
+model Quotation {
+  id               BigInt          @id @default(autoincrement())
+  organization_id  BigInt
+  customer_id      BigInt?
+  total_amount     Decimal         @db.Decimal(15, 2)
+  status           QuotationStatus @default(DRAFT)
+  quotation_number String          @unique
+  validity_date    DateTime?
+  created_by_id    BigInt
+  timestamp        DateTime        @default(now())
+  deleted_by_id    BigInt?
+  deleted_at       DateTime?
+  branch_id        BigInt?
+  is_deleted       Boolean         @default(false)
+  restore_allowed  Boolean         @default(true)
+
+  Branch                             Branch?         @relation(fields: [branch_id], references: [id])
+  User_Quotation_created_by_idToUser User            @relation("Quotation_created_by_idToUser", fields: [created_by_id], references: [id])
+  Customer                           Customer?       @relation(fields: [customer_id], references: [id])
+  User_Quotation_deleted_by_idToUser User?           @relation("Quotation_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+  Organization                       Organization    @relation(fields: [organization_id], references: [id])
+  items                              QuotationItem[]
+}
+
+model QuotationItem {
+  id              BigInt    @id @default(autoincrement())
+  quotation_id    BigInt
+  product_id      BigInt
+  quantity        Int
+  unit_price      Decimal   @db.Decimal(15, 2)
+  subtotal        Decimal   @db.Decimal(15, 2)
+  status          String    @default("ACTIVE")
+  updated_at      DateTime  @updatedAt
+  deleted_by_id   BigInt?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
+  restore_allowed Boolean   @default(true)
+
+  User      User?     @relation(fields: [deleted_by_id], references: [id])
+  Product   Product   @relation(fields: [product_id], references: [id])
+  Quotation Quotation @relation(fields: [quotation_id], references: [id])
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  SUBMITTED
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id               BigInt         @id @default(autoincrement())
+  organization_id  BigInt
+  subject          String
+  category         String
+  priority         TicketPriority
+  assigned_to_id   BigInt?
+  message          String
+  response_message String?
+  sla_target       DateTime
+  status           TicketStatus   @default(SUBMITTED)
+  created_by_id    BigInt
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @updatedAt
+  deleted_by_id    BigInt?
+  deleted_at       DateTime?
+  is_deleted       Boolean        @default(false)
+
+  Organization                            Organization @relation(fields: [organization_id], references: [id])
+  User_SupportTicket_created_by_idToUser  User         @relation("SupportTicket_created_by_idToUser", fields: [created_by_id], references: [id])
+  User_SupportTicket_assigned_to_idToUser User?        @relation("SupportTicket_assigned_to_idToUser", fields: [assigned_to_id], references: [id])
+  User_SupportTicket_deleted_by_idToUser  User?        @relation("SupportTicket_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
+}
+
+// =====================================================================
+// AGROVET EXTENSION MODELS
+// Additive only: every model below is scoped by organization_id and is
+// used exclusively by the agrovet feature set. No existing model's
+// behaviour changes for other org types.
+// =====================================================================
+
+/// Agrovet product department split. GENERAL is the default so non-agrovet
+/// tenants are unaffected.
+enum ProductDepartment {
+  GENERAL
+  AGRO
+  VET
+}
+
+/// Status of a sale's EBM (Rwanda RRA) fiscal invoice.
+enum EbmStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum DiscountRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A cashier-initiated discount that must be approved by an Owner/Accountant
+/// before it can be applied to a sale. Server-side workflow, not a UI hint.
+model DiscountRequest {
+  id              BigInt                @id @default(autoincrement())
+  organization_id BigInt
+  branch_id       BigInt?
+  requested_by_id BigInt
+  reviewed_by_id  BigInt?
+  customer_id     BigInt?
+  /// Requested discount as an absolute amount on the intended sale total.
+  amount          Decimal               @db.Decimal(15, 2)
+  /// The intended sale total the discount applies to (for auditing / % checks).
+  sale_total      Decimal               @db.Decimal(15, 2)
+  reason          String?
+  status          DiscountRequestStatus @default(PENDING)
+  /// Set once an approved request is consumed by a sale, so it can't be reused.
+  applied_sale_id BigInt?
+  review_comment  String?
+  created_at      DateTime              @default(now())
+  reviewed_at     DateTime?
+
+  Organization Organization @relation(fields: [organization_id], references: [id])
+  Branch       Branch?      @relation(fields: [branch_id], references: [id])
+  RequestedBy  User         @relation("DiscountRequest_requested_by", fields: [requested_by_id], references: [id])
+  ReviewedBy   User?        @relation("DiscountRequest_reviewed_by", fields: [reviewed_by_id], references: [id])
+}
+
+/// Unified notification/alert event. One consistent shape for every alert type
+/// (low stock, expiry, unusual discount, large/voided sale, overdue credit).
+model NotificationEvent {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  branch_id       BigInt?
+  /// Event type slug, e.g. LOW_STOCK, EXPIRY_30, EXPIRY_7, UNUSUAL_DISCOUNT,
+  /// LARGE_SALE, VOIDED_SALE, OVERDUE_CREDIT.
+  type            String
+  severity        String   @default("INFO")
+  title           String
+  message         String
+  /// Role name this alert is routed to (e.g. "Owner"), null = all staff.
+  target_role     String?
+  /// Free-form context: product_id, sale_id, customer_id, amounts, etc.
+  data            Json?
+  is_read         Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  Organization Organization @relation(fields: [organization_id], references: [id])
+  Branch       Branch?      @relation(fields: [branch_id], references: [id])
+
+  @@index([organization_id, is_read])
+  @@index([organization_id, type])
+}
+
+/// Payment made to a supplier against outstanding payables. Decrements
+/// Supplier.outstanding_balance.
+model SupplierPayment {
+  id              BigInt        @id @default(autoincrement())
+  organization_id BigInt
+  supplier_id     BigInt
+  amount          Decimal       @db.Decimal(15, 2)
+  payment_method  PaymentMethod @default(BANK_TRANSFER)
+  reference       String?
+  note            String?
+  created_by_id   BigInt
+  created_at      DateTime      @default(now())
+
+  Organization Organization @relation(fields: [organization_id], references: [id])
+  Supplier     Supplier     @relation(fields: [supplier_id], references: [id])
+  CreatedBy    User         @relation("SupplierPayment_created_by", fields: [created_by_id], references: [id])
+
+  @@index([organization_id, supplier_id])
+}
