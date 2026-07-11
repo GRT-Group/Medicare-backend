@@ -1,11 +1,6 @@
 import { NextResponse } from 'next/server';
-import { friendlyMessage } from '@/lib/api-error'
+import { apiError } from '@/lib/api-error'
 import { SubscriptionPlanService } from '@/services/subscription-plan.service';
-
-// JSON serialization for BigInt
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
 
 export async function GET() {
   try {
@@ -13,9 +8,9 @@ export async function GET() {
       SubscriptionPlanService.getAllPlans(),
       SubscriptionPlanService.getAllDiscountRules(),
     ]);
-    const serialized = JSON.parse(JSON.stringify({ plans, discounts }, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+    const serialized = JSON.parse(JSON.stringify({ plans, discounts }, (k, v) => typeof v === 'bigint' ? v.toString() : v));
     return NextResponse.json(serialized, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ error: friendlyMessage(error) }, { status: 500 });
+    return apiError(error);
   }
 }
