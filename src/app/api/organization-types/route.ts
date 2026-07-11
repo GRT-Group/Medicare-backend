@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiError, friendlyMessage } from '@/lib/api-error'
 import { OrganizationTypeService } from '@/services/organization-type.service'
-
 export async function GET(req: NextRequest) {
   try {
     const id = req.nextUrl.searchParams.get('id')
-    
     // If an ID is provided, fetch a single organization type
     if (id) {
       const organizationType = await OrganizationTypeService.getOrganizationTypeById(id)
@@ -14,7 +12,6 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({ success: true, data: JSON.parse(JSON.stringify(organizationType, (k, v) => typeof v === 'bigint' ? v.toString() : v)) })
     }
-
     // Otherwise fetch all organization types
     const organizationTypes = await OrganizationTypeService.getAllOrganizationTypes()
     return NextResponse.json({ success: true, data: JSON.parse(JSON.stringify(organizationTypes, (k, v) => typeof v === 'bigint' ? v.toString() : v)) })
@@ -22,7 +19,6 @@ export async function GET(req: NextRequest) {
     return apiError(error)
   }
 }
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
