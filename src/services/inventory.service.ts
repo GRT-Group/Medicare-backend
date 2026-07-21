@@ -50,6 +50,15 @@ export class InventoryService {
 
       // 3. Create Movement
       const movementType = data.quantity_change > 0 ? 'ADJUSTMENT_UP' : 'ADJUSTMENT_DOWN';
+      
+      // Calculate overall stock before (sum of all batches for product)
+      const batchesBefore = await tx.productBatch.findMany({
+        where: { product_id: data.product_id, organization_id: organizationId, is_deleted: false, quantity_remaining: { gt: 0 } }
+      });
+      const stockBefore = batchesBefore.reduce((acc, b) => acc + b.quantity_remaining, 0);
+      const stockAfter = stockBefore + data.quantity_change;
+      const valueImpact = Math.abs(data.quantity_change) * Number(batch.unit_cost);
+      const riskLevel = valueImpact > 50000 ? 'Critical' : valueImpact > 10000 ? 'Review' : 'Normal';
 
       const movement = await tx.inventoryMovement.create({
         data: {
@@ -59,7 +68,11 @@ export class InventoryService {
           movement_type_id: movementType,
           quantity: Math.abs(data.quantity_change),
           reference_id: data.reason, // e.g., 'DAMAGED_STOCK'
-          created_by_id: adminId
+          created_by_id: adminId,
+          stock_before: stockBefore,
+          stock_after: stockAfter,
+          value_impact: valueImpact,
+          risk_level: riskLevel
         }
       });
 
@@ -77,6 +90,95 @@ export class InventoryService {
 
       return movement;
     });
+  }
+
+  // ==============================================
+  // GENERAL STOCK ADJUSTMENT (FIFO)
+  // ==============================================
+
+  static async adjustGeneralStock(organizationId: bigint, data: {
+    product_id: bigint;
+    quantity_change: number;
+    cost_price?: number;
+    selling_price?: number;
+    reference: string;
+    note?: string;
+  }, adminId: bigint) {
+    if (data.quantity_change > 0) {
+      return this.addDirectStock(
+        organizationId,
+        {
+          product_id: data.product_id,
+          quantity: data.quantity_change,
+          unit_cost: data.cost_price || 0,
+          selling_price: data.selling_price || 0,
+          batch_number: `ADJ-${Date.now()}`
+        },
+        adminId
+      );
+    } else if (data.quantity_change < 0) {
+      return prisma.$transaction(async (tx) => {
+        const product = await tx.product.findUnique({ where: { id: data.product_id, organization_id: organizationId } });
+        if (!product) throw new Error('Product not found');
+
+        const org = await tx.organization.findUnique({ where: { id: organizationId } });
+        const method = org?.inventory_method || 'FIFO';
+
+        const orderBy = method === 'LIFO' 
+          ? [{ id: 'desc' as any }] 
+          : [{ expiry_date: 'asc' as any }, { id: 'asc' as any }];
+
+        const activeBatches = await tx.productBatch.findMany({
+          where: { product_id: data.product_id, organization_id: organizationId, is_deleted: false, quantity_remaining: { gt: 0 } },
+          orderBy: orderBy
+        });
+
+        let remainingQtyToDeduct = Math.abs(data.quantity_change);
+        let totalDeducted = 0;
+        let currentStock = activeBatches.reduce((acc, b) => acc + b.quantity_remaining, 0);
+        
+        for (const batch of activeBatches) {
+          if (remainingQtyToDeduct <= 0) break;
+          const take = Math.min(batch.quantity_remaining, remainingQtyToDeduct);
+          
+          await tx.productBatch.update({
+            where: { id: batch.id },
+            data: { quantity_remaining: batch.quantity_remaining - take }
+          });
+          
+          const valueImpact = take * Number(batch.unit_cost || 0);
+          const riskLevel = valueImpact > 50000 ? 'Critical' : valueImpact > 10000 ? 'Review' : 'Normal';
+          
+          await tx.inventoryMovement.create({
+            data: {
+              organization_id: organizationId,
+              product_id: data.product_id,
+              batch_id: batch.id,
+              movement_type_id: 'ADJUSTMENT_DOWN',
+              quantity: take,
+              reference_id: data.reference || 'GENERAL_ADJUSTMENT',
+              created_by_id: adminId,
+              stock_before: currentStock,
+              stock_after: currentStock - take,
+              value_impact: valueImpact,
+              risk_level: riskLevel
+            }
+          });
+          
+          currentStock -= take;
+          
+          remainingQtyToDeduct -= take;
+          totalDeducted += take;
+        }
+
+        if (remainingQtyToDeduct > 0) {
+          throw new Error(`Insufficient stock. Cannot deduct ${Math.abs(data.quantity_change)}. Only ${totalDeducted} available.`);
+        }
+        
+        return { success: true, message: `Deducted ${totalDeducted} from inventory.` };
+      });
+    }
+    return { success: true, message: 'No adjustment needed (0 change).' };
   }
 
   // ==============================================
@@ -222,6 +324,15 @@ export class InventoryService {
     expiry_date?: Date;
   }, adminId: bigint) {
     return prisma.$transaction(async (tx) => {
+      // 0. Compute Stock Before
+      const batchesBefore = await tx.productBatch.findMany({
+        where: { product_id: data.product_id, organization_id: organizationId, is_deleted: false, quantity_remaining: { gt: 0 } }
+      });
+      const stockBefore = batchesBefore.reduce((acc, b) => acc + b.quantity_remaining, 0);
+      const stockAfter = stockBefore + data.quantity;
+      const valueImpact = data.quantity * data.unit_cost;
+      const riskLevel = valueImpact > 50000 ? 'Critical' : valueImpact > 10000 ? 'Review' : 'Normal';
+
       // 1. Create a ProductBatch
       const batch = await tx.productBatch.create({
         data: {
@@ -244,7 +355,11 @@ export class InventoryService {
           movement_type_id: 'INCREASE',
           quantity: data.quantity,
           reference_id: 'DIRECT_STOCK_ENTRY',
-          created_by_id: adminId
+          created_by_id: adminId,
+          stock_before: stockBefore,
+          stock_after: stockAfter,
+          value_impact: valueImpact,
+          risk_level: riskLevel
         }
       });
 

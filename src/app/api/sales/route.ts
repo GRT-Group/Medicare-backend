@@ -19,7 +19,36 @@ export async function GET(req: Request) {
     if (!orgId || !/^\d+$/.test(orgId)) return NextResponse.json({ error: 'Missing or invalid x-organization-id header' }, { status: 400 });
 
     const sales = await SaleService.getSales(BigInt(orgId));
-    return NextResponse.json(sales, { status: 200 });
+    
+    // Map strictly to the UI grid layout
+    const formatted = sales.map((sale: any) => {
+      let ebmStatusLabel = sale.ebm_status === 'SUCCESS' ? sale.ebm_invoice_number : 
+                           sale.ebm_status === 'PENDING' && !sale.ebm_invoice_number ? 'Not Configured' : 
+                           sale.ebm_status;
+                           
+      let paymentLabel = sale.payment_method;
+      if (paymentLabel === 'MOBILE_MONEY' || paymentLabel === 'MOMO') paymentLabel = 'Mobile Money';
+      if (paymentLabel === 'CASH') paymentLabel = 'Cash';
+
+      const netItems = sale.items?.reduce((acc: number, item: any) => acc + item.quantity, 0) || 0;
+
+      return {
+        id: sale.id,
+        invoice: sale.invoice_number,
+        customer: sale.customer_name || 'Walk-in Customer',
+        customerTIN: '—', // Typically derived from customer record, using placeholder
+        ebmStatus: ebmStatusLabel,
+        netItems,
+        total: sale.total_amount,
+        paid: sale.amount_paid,
+        due: sale.remaining_balance,
+        paymentMethod: paymentLabel,
+        status: sale.status.toLowerCase(),
+        date: sale.timestamp
+      };
+    });
+
+    return NextResponse.json(formatted, { status: 200 });
   } catch (error: any) {
     return apiError(error);
   }
@@ -45,6 +74,7 @@ export async function POST(req: Request) {
     const branchId = body.branch_id ?? body.branchId;
     const amountPaid = body.amount_paid ?? body.amountPaid;
     const dueDateRaw = body.due_date ?? body.dueDate;
+    const allocationStrategy = body.allocation_strategy ?? body.allocationStrategy;
 
     if (!paymentMethodRaw) {
       return badRequestResponse(`payment_method is required (${PAYMENT_METHODS_HINT})`);
@@ -84,6 +114,7 @@ export async function POST(req: Request) {
       payment_method: paymentMethod,
       amount_paid: amountPaidNum,
       due_date: dueDate,
+      allocation_strategy: allocationStrategy,
       items,
     }, BigInt(adminId));
 

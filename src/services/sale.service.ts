@@ -551,6 +551,7 @@ export class SaleService {
     payment_method: string; // 'CASH', 'CREDIT', 'MOMO', 'CARD', 'BANK_TRANSFER', 'MANUAL_INVOICE'
     amount_paid?: number;
     due_date?: Date;
+    allocation_strategy?: 'FIFO' | 'LIFO' | 'FEFO'; // default to FEFO
     items: {
       product_id: bigint;
       /** Optional: the batch the cashier picked on screen — deducted first when given. */
@@ -585,7 +586,7 @@ export class SaleService {
       }
 
       // ONE query: every active batch for every product in the sale,
-      // FIFO-ordered (oldest expiry first).
+      // dynamically ordered by allocation strategy (FIFO, LIFO, or default FEFO)
       const allBatches = await tx.productBatch.findMany({
         where: {
           organization_id: organizationId,
@@ -593,7 +594,9 @@ export class SaleService {
           quantity_remaining: { gt: 0 },
           is_deleted: false
         },
-        orderBy: { expiry_date: 'asc' }
+        orderBy: data.allocation_strategy === 'FIFO' ? [{ id: 'asc' }] :
+                 data.allocation_strategy === 'LIFO' ? [{ id: 'desc' }] :
+                 [{ expiry_date: 'asc' }, { id: 'asc' }]
       });
 
       const batchesByProduct = new Map<string, typeof allBatches>();

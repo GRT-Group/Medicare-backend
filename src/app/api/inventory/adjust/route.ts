@@ -14,23 +14,50 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     
-    if (!body.product_id || !body.batch_id || body.quantity_change === undefined || !body.reason) {
-      return NextResponse.json({ error: 'Missing required fields for stock adjustment' }, { status: 400 });
+    // Support frontend payload structure:
+    // productId, adjustmentType, quantityChange, costPrice, sellingPrice, reference, notes
+    const productId = body.productId || body.product_id;
+    const batchId = body.batchId || body.batch_id;
+    const quantityChange = body.quantityChange !== undefined ? Number(body.quantityChange) : (body.quantity_change !== undefined ? Number(body.quantity_change) : undefined);
+    const reason = body.reference || body.reason || body.adjustmentType || 'GENERAL_ADJUSTMENT';
+    const note = body.notes || body.note;
+    
+    if (!productId || quantityChange === undefined) {
+      return NextResponse.json({ error: 'Missing productId or quantityChange for stock adjustment' }, { status: 400 });
     }
 
-    const movement = await InventoryService.adjustStock(
-      BigInt(orgId), 
-      {
-        product_id: BigInt(body.product_id),
-        batch_id: BigInt(body.batch_id),
-        quantity_change: Number(body.quantity_change),
-        reason: body.reason,
-        note: body.note
-      }, 
-      BigInt(adminId || 1)
-    );
+    let movement;
 
-    return NextResponse.json({ message: 'Stock adjusted successfully', movement }, { status: 201 });
+    if (batchId) {
+      // Legacy / Specific Batch Adjustment
+      movement = await InventoryService.adjustStock(
+        BigInt(orgId), 
+        {
+          product_id: BigInt(productId),
+          batch_id: BigInt(batchId),
+          quantity_change: quantityChange,
+          reason: reason,
+          note: note
+        }, 
+        BigInt(adminId || 1)
+      );
+    } else {
+      // General Stock Adjustment (FIFO for deductions, create new batch for additions)
+      movement = await InventoryService.adjustGeneralStock(
+        BigInt(orgId),
+        {
+          product_id: BigInt(productId),
+          quantity_change: quantityChange,
+          cost_price: body.costPrice ? Number(body.costPrice) : undefined,
+          selling_price: body.sellingPrice ? Number(body.sellingPrice) : undefined,
+          reference: reason,
+          note: note
+        },
+        BigInt(adminId || 1)
+      );
+    }
+
+    return NextResponse.json({ message: 'Stock adjusted successfully', result: movement }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: friendlyMessage(error) }, { status: 500 });
   }

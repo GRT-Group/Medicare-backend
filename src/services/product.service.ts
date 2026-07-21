@@ -63,12 +63,13 @@ export class ProductService {
     });
   }
 
-  static async createCategory(organizationId: bigint, data: { name: string; product_type_id: bigint | string }, adminId?: bigint) {
+  static async createCategory(organizationId: bigint, data: { name: string; description?: string; product_type_id: bigint | string }, adminId?: bigint) {
     return prisma.category.create({
       data: {
         organization_id: organizationId,
         product_type_id: BigInt(data.product_type_id),
         name: data.name,
+        description: data.description,
         created_by_id: adminId
       }
     });
@@ -118,7 +119,8 @@ export class ProductService {
         ProductBatch: {
           where: { deleted_at: null, quantity_remaining: { gt: 0 } },
           orderBy: { expiry_date: 'asc' }
-        }
+        },
+        UnitOfMeasure: true
       },
       orderBy: { name: 'asc' }
     });
@@ -128,29 +130,66 @@ export class ProductService {
     category_id: bigint;
     brand_id?: bigint;
     name: string;
+    sku?: string;
+    description?: string;
     barcode?: string;
-    unit_of_measure: string;
+    unit_of_measure?: string;
+    unit_of_measure_id?: bigint;
     base_cost?: number;
     base_price?: number;
     tax_rate?: number;
     reorder_level?: number;
     image_url?: string;
+    stockQuantity?: number;
   }, adminId?: bigint) {
-    return prisma.product.create({
-      data: {
-        organization_id: organizationId,
-        category_id: data.category_id,
-        brand_id: data.brand_id,
-        name: data.name,
-        barcode: data.barcode,
-        unit_of_measure: data.unit_of_measure,
-        base_cost: data.base_cost || 0,
-        base_price: data.base_price || 0,
-        tax_rate: data.tax_rate || 0,
-        reorder_level: data.reorder_level || 0,
-        image_url: data.image_url,
-        created_by_id: adminId
+    return prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          organization_id: organizationId,
+          category_id: data.category_id,
+          brand_id: data.brand_id,
+          name: data.name,
+          sku: data.sku,
+          description: data.description,
+          barcode: data.barcode,
+          unit_of_measure: data.unit_of_measure,
+          unit_of_measure_id: data.unit_of_measure_id,
+          base_cost: data.base_cost || 0,
+          base_price: data.base_price || 0,
+          tax_rate: data.tax_rate || 0,
+          reorder_level: data.reorder_level || 0,
+          image_url: data.image_url,
+          created_by_id: adminId
+        }
+      });
+
+      if (data.stockQuantity && data.stockQuantity > 0) {
+        const batch = await tx.productBatch.create({
+          data: {
+            organization_id: organizationId,
+            product_id: product.id,
+            batch_number: 'OPENING-STOCK',
+            quantity_remaining: data.stockQuantity,
+            unit_cost: data.base_cost || 0,
+            selling_price: data.base_price || 0,
+            status: 'ACTIVE'
+          }
+        });
+
+        await tx.inventoryMovement.create({
+          data: {
+            organization_id: organizationId,
+            product_id: product.id,
+            batch_id: batch.id,
+            movement_type_id: 'OPENING_STOCK',
+            type: 'STOCK_ADJUSTMENT',
+            quantity: data.stockQuantity,
+            created_by_id: adminId || 0n
+          }
+        });
       }
+
+      return product;
     });
   }
 
@@ -160,6 +199,7 @@ export class ProductService {
     name: string;
     barcode: string;
     unit_of_measure: string;
+    unit_of_measure_id: bigint;
     base_cost: number;
     base_price: number;
     tax_rate: number;

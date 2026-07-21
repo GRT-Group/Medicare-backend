@@ -27,7 +27,8 @@ export async function GET(req: Request) {
       categoryName: p.Category?.name || '',
       name: p.name,
       barcode: p.barcode,
-      unitOfMeasure: p.unit_of_measure,
+      unitOfMeasure: p.UnitOfMeasure?.name || p.unit_of_measure,
+      unit_of_measure_id: p.unit_of_measure_id,
       pricing: {
         purchasePrice: p.base_cost,
         sellingPrice: p.base_price,
@@ -49,10 +50,28 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const orgId = req.headers.get('x-organization-id');
+    const adminId = req.headers.get('x-user-id');
     if (!orgId) return NextResponse.json({ error: 'Missing x-organization-id header' }, { status: 400 });
 
     const body = await req.json();
-    const product = await ProductService.createProduct(BigInt(orgId), body);
+    
+    // Extract nested or flat properties robustly
+    const payload = {
+      ...body,
+      sku: body.sku || body.SKU,
+      description: body.description || body.Description,
+      unit_of_measure_id: body.unit_of_measure_id ? BigInt(body.unit_of_measure_id) : undefined,
+      stockQuantity: body.stockQuantity !== undefined ? Number(body.stockQuantity) : 
+                     (body.stock?.currentStock !== undefined ? Number(body.stock?.currentStock) : 0),
+      base_cost: body.base_cost !== undefined ? Number(body.base_cost) : 
+                 (body.pricing?.purchasePrice !== undefined ? Number(body.pricing?.purchasePrice) : 0),
+      base_price: body.base_price !== undefined ? Number(body.base_price) : 
+                  (body.pricing?.sellingPrice !== undefined ? Number(body.pricing?.sellingPrice) : 0),
+      reorder_level: body.reorder_level !== undefined ? Number(body.reorder_level) : 
+                     (body.stock?.reorderLevel !== undefined ? Number(body.stock?.reorderLevel) : 0)
+    };
+
+    const product = await ProductService.createProduct(BigInt(orgId), payload, adminId ? BigInt(adminId) : undefined);
     return NextResponse.json(product, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: friendlyMessage(error) }, { status: 500 });
@@ -69,6 +88,9 @@ export async function PUT(req: Request) {
     if (!orgId || !id) return NextResponse.json({ error: 'Missing organization ID or product ID' }, { status: 400 });
 
     const body = await req.json();
+    if (body.unit_of_measure_id) {
+      body.unit_of_measure_id = BigInt(body.unit_of_measure_id);
+    }
     const product = await ProductService.updateProduct(BigInt(id), BigInt(orgId), body, BigInt(adminId));
     return NextResponse.json(product, { status: 200 });
   } catch (error: any) {
