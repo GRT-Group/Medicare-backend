@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { friendlyMessage } from '@/lib/api-error';
 import { SaleService } from '@/services/sale.service';
+import { resolveContext, toErrorResponse } from '@/lib/agrovet/context';
+import { prisma } from '@/lib/prisma';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -8,28 +10,39 @@ import { SaleService } from '@/services/sale.service';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const orgId = req.headers.get('x-organization-id');
-    const adminId = req.headers.get('x-user-id');
-    if (!orgId) return NextResponse.json({ error: 'Missing x-organization-id header' }, { status: 400 });
-    if (!adminId) return NextResponse.json({ error: 'Missing x-user-id header' }, { status: 400 });
+    const ctx = await resolveContext(req as any);
 
     const { id } = await params;
     if (!/^\d+$/.test(id)) {
       return NextResponse.json({ error: `Invalid sale id: "${id}"` }, { status: 400 });
     }
 
-    const body = await req.json();
-    const amount = Number(body.amount);
-    const paymentMethod = body.payment_method || 'CASH';
+    const body = await req.json().catch(() => ({})); // Handle empty body gracefully
+    let rawAmount = body.amount ?? body.amount_paid ?? body.amountPaid;
+    let paymentMethod = body.payment_method || body.paymentMethod || 'CASH';
 
+    if (rawAmount === undefined || rawAmount === null || rawAmount === '') {
+      // If no amount is provided, default to paying the full remaining balance
+      const sale = await prisma.sale.findUnique({
+        where: { id: BigInt(id) },
+        select: { remaining_balance: true }
+      });
+      if (!sale) return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
+      rawAmount = Number(sale.remaining_balance);
+    }
+
+    const amount = Number(rawAmount);
     if (isNaN(amount) || amount <= 0) {
       return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
     }
 
-    const sale = await SaleService.payCreditSale(BigInt(id), BigInt(orgId), BigInt(adminId), amount, paymentMethod);
+    const sale = await SaleService.payCreditSale(BigInt(id), ctx.organizationId, ctx.userId, amount, paymentMethod);
     return NextResponse.json(sale, { status: 200 });
   } catch (error: any) {
-    const status = /not found/i.test(error?.message ?? '') ? 404 : 400;
-    return NextResponse.json({ error: friendlyMessage(error) }, { status });
+    if (/not found/i.test(error?.message ?? '')) {
+      return NextResponse.json({ error: friendlyMessage(error) }, { status: 404 });
+    }
+    const { body, status } = toErrorResponse(error);
+    return NextResponse.json(body, { status });
   }
 }

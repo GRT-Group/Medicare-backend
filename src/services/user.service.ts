@@ -84,13 +84,37 @@ export class UserService {
 
     if (!user) return null
 
-    const { password_hash, Branch_User_branch_idToBranch, ...safeUser } = user
-    const permissions = await PermissionService.getUserPermissions(user.id, safeUser.organization_id)
+    let finalUser = user;
+
+    if (!finalUser.branch_id && finalUser.organization_id) {
+      const branches = await prisma.branch.findMany({
+        where: { organization_id: finalUser.organization_id, is_deleted: false },
+        take: 2
+      })
+      if (branches.length === 1) {
+        finalUser = await prisma.user.update({
+          where: { id: finalUser.id },
+          data: { branch_id: branches[0].id },
+          include: {
+            role: true,
+            organization: {
+              include: {
+                Subscription: true
+              }
+            },
+            Branch_User_branch_idToBranch: true
+          }
+        })
+      }
+    }
+
+    const { password_hash, Branch_User_branch_idToBranch, ...safeUser } = finalUser
+    const permissions = await PermissionService.getUserPermissions(finalUser.id, safeUser.organization_id)
 
     return {
       ...safeUser,
       branch: Branch_User_branch_idToBranch,
-      is_super_admin: PermissionService.isSuperAdmin(user.role_id),
+      is_super_admin: PermissionService.isSuperAdmin(finalUser.role_id),
       permissions
     }
   }

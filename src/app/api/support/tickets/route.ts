@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { friendlyMessage } from '@/lib/api-error'
 import { SupportService } from '@/services/support.service';
 import { getBearerToken, verifyBearerToken } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
+import { EmailService } from '@/services/email.service';
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
     }
 
     const organizationId = decoded.organization_id ? BigInt(decoded.organization_id) : undefined;
-    const isSuperAdmin = decoded.role_id === 9 || decoded.role === 'super_admin';
+    const isSuperAdmin = Number(decoded.role_id) === 9 || decoded.role === 'super_admin';
 
     // If super admin, they can see all tickets (or organizationId = undefined in SupportService)
     const tickets = isSuperAdmin 
@@ -109,6 +111,57 @@ export async function POST(req: NextRequest) {
       } : null
     };
 
+    // Dispatch emails asynchronously
+    (async () => {
+      try {
+        const adminEmail = newTicket.User_SupportTicket_created_by_idToUser?.email;
+        const adminName = `${newTicket.User_SupportTicket_created_by_idToUser?.first_name || ''} ${newTicket.User_SupportTicket_created_by_idToUser?.last_name || ''}`.trim();
+        
+        // Get organization name
+        const org = await prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true }
+        });
+        const orgName = org?.name || 'Unknown Organization';
+
+        // Get Super Admins (role_id 9 or role name 'super_admin')
+        const superAdmins = await prisma.user.findMany({
+          where: {
+            OR: [
+              { role_id: 9 },
+              { role: { name: 'super_admin' } }
+            ]
+          },
+          select: { email: true }
+        });
+        const superAdminEmails = superAdmins.map((u: any) => u.email).filter(Boolean);
+
+        // 1. Send confirmation to the Administrator
+        if (adminEmail) {
+          await EmailService.sendSupportTicketCreatedToAdmin(
+            adminEmail,
+            adminName || 'Admin',
+            subject,
+            newTicket.id.toString()
+          );
+        }
+
+        // 2. Send notification to Super Admins
+        if (superAdminEmails.length > 0) {
+          await EmailService.sendSupportTicketCreatedToSuperAdmin(
+            superAdminEmails,
+            orgName,
+            adminName || 'Admin',
+            subject,
+            priority,
+            newTicket.id.toString()
+          );
+        }
+      } catch (emailError) {
+        console.error('[Support Email Error] Failed to send ticket creation emails:', emailError);
+      }
+    })();
+
     return NextResponse.json({ success: true, message: 'Support ticket created successfully', data: serializedTicket }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: friendlyMessage(error) }, { status: 400 });
@@ -136,7 +189,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing ticket ID' }, { status: 400 });
     }
 
-    const isSuperAdmin = decoded.role_id === 9 || decoded.role === 'super_admin';
+    const isSuperAdmin = Number(decoded.role_id) === 9 || decoded.role === 'super_admin';
     const organizationId = decoded.organization_id ? BigInt(decoded.organization_id) : undefined;
 
     if (!isSuperAdmin && !organizationId) {
@@ -156,6 +209,38 @@ export async function PUT(req: NextRequest) {
       },
       isSuperAdmin ? undefined : organizationId // To ensure org admins only update their org's tickets
     );
+
+    // If status or response message changed, send email to ticket creator
+    if (status || responseMessage) {
+      (async () => {
+        try {
+          const ticketWithCreator = await prisma.supportTicket.findUnique({
+            where: { id: BigInt(id) },
+            include: {
+              User_SupportTicket_created_by_idToUser: {
+                select: { email: true, first_name: true, last_name: true }
+              }
+            }
+          });
+
+          const creator = ticketWithCreator?.User_SupportTicket_created_by_idToUser;
+          if (creator && creator.email) {
+            const adminName = `${creator.first_name || ''} ${creator.last_name || ''}`.trim() || 'Admin';
+            await EmailService.sendSupportTicketReplyToAdmin(
+              creator.email,
+              adminName,
+              ticketWithCreator.subject,
+              updatedTicket.response_message || '',
+              updatedTicket.status,
+              updatedTicket.id.toString(),
+              ticketWithCreator.message || ''
+            );
+          }
+        } catch (emailError) {
+          console.error('[Support Email Error] Failed to send ticket reply email:', emailError);
+        }
+      })();
+    }
 
     return NextResponse.json({ success: true, message: 'Support ticket updated successfully', data: updatedTicket });
   } catch (error: any) {

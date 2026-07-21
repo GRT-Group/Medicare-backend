@@ -22,7 +22,9 @@ export async function GET(req: Request) {
     const formattedProducts = products.map((p: any) => ({
       id: p.id,
       productTypeId: p.Category?.product_type_id,
+      productTypeName: p.Category?.ProductType?.name || '',
       categoryId: p.category_id,
+      categoryName: p.Category?.name || '',
       name: p.name,
       barcode: p.barcode,
       unitOfMeasure: p.unit_of_measure,

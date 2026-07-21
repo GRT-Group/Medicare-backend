@@ -72,7 +72,8 @@ export class NotificationService {
     const preferences = await this.getUserPreferences(userId)
     const fullName = firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || 'User'
 
-    if (preferences.authEmailEnabled) {
+    const shouldSendEmail = preferences.authEmailEnabled || type === 'LOGIN_2FA'
+    if (shouldSendEmail) {
       if (type === 'EMAIL_VERIFICATION') {
         await EmailService.sendRegistrationOtp(email, code, fullName)
       } else if (type === 'PASSWORD_RESET') {
@@ -82,7 +83,8 @@ export class NotificationService {
       }
     }
 
-    if (preferences.authSmsEnabled && phone) {
+    const shouldSendSms = (preferences.authSmsEnabled || type === 'LOGIN_2FA') && phone
+    if (shouldSendSms) {
       const isLogin = type === 'LOGIN_2FA'
       const smsMessage = isLogin
         ? `Hello ${fullName}! Your Medicare System Login OTP is: ${code}. It expires in 30 minutes.`
@@ -91,8 +93,8 @@ export class NotificationService {
     }
 
     return {
-      emailSent: preferences.authEmailEnabled,
-      smsSent: preferences.authSmsEnabled && !!phone
+      emailSent: shouldSendEmail,
+      smsSent: !!shouldSendSms
     }
   }
 

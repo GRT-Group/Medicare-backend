@@ -25,7 +25,7 @@ async function loadCustomerAndOrg(organizationId: bigint, customerId: bigint) {
   const [customer, org] = await Promise.all([
     prisma.customer.findFirst({
       where: { id: customerId, organization_id: organizationId },
-      select: { id: true, name: true, phone: true, email: true, current_balance: true },
+      select: { id: true, name: true, phone: true, email: true, current_balance: true, credit_limit: true },
     }),
     prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
   ])
@@ -69,9 +69,13 @@ export class CustomerNotifyService {
 
       const remaining = Number(sale.remaining_balance)
       const due = fmtDate(sale.due_date)
+      const limit = Number(customer.credit_limit || 0)
+      const currentBalance = Number(customer.current_balance)
+      const remainingLimitText = limit > 0 ? ` Remaining Credit Limit: ${fmtRwf(limit - currentBalance)}.` : ''
+
       const message = remaining > 0
-        ? `Dear ${customer.name}, your purchase at ${orgName} (invoice ${sale.invoice_number}) totals ${fmtRwf(sale.total_amount)}. Paid: ${fmtRwf(sale.amount_paid)}. Balance due: ${fmtRwf(remaining)}${due ? ` by ${due}` : ''}. Your total outstanding balance is ${fmtRwf(customer.current_balance)}. Thank you.`
-        : `Dear ${customer.name}, thank you for your purchase at ${orgName} (invoice ${sale.invoice_number}) of ${fmtRwf(sale.total_amount)}, fully paid. We appreciate your business.`
+        ? `Dear ${customer.name},\nYour new credit purchase at ${orgName} (Invoice ${sale.invoice_number}) has been recorded.\nTotal Amount: ${fmtRwf(sale.total_amount)}\nAmount Paid: ${fmtRwf(sale.amount_paid)}\nCredit Added: ${fmtRwf(remaining)}${due ? ` (Due by ${due})` : ''}.\nYour Total Outstanding Balance is now: ${fmtRwf(currentBalance)}.${remainingLimitText}\nThank you!`
+        : `Dear ${customer.name},\nThank you for your purchase at ${orgName} (Invoice ${sale.invoice_number}) of ${fmtRwf(sale.total_amount)}, fully paid. We appreciate your business!`
 
       await deliver(customer, `Your purchase at ${orgName} — ${sale.invoice_number}`, message)
     } catch (e) {
@@ -92,8 +96,11 @@ export class CustomerNotifyService {
       const { customer, orgName } = await loadCustomerAndOrg(organizationId, customerId)
       if (!customer) return
 
+      const limit = Number(customer.credit_limit || 0)
       const remaining = Math.max(info.new_balance, 0)
-      const message = `Dear ${customer.name}, ${orgName} has received your payment of ${fmtRwf(info.amount)}${info.reference ? ` (ref ${info.reference})` : ''}. ${remaining > 0 ? `Remaining balance: ${fmtRwf(remaining)}.` : 'Your account is now fully settled.'} Thank you.`
+      const remainingLimitText = limit > 0 ? ` Remaining Credit Limit: ${fmtRwf(limit - remaining)}.` : ''
+
+      const message = `Dear ${customer.name},\n${orgName} has successfully received your payment of ${fmtRwf(info.amount)}${info.reference ? ` (Ref: ${info.reference})` : ''}.\n${remaining > 0 ? `Your New Outstanding Balance is: ${fmtRwf(remaining)}.` : 'Your account is now fully settled.'}${remainingLimitText}\nThank you for your business!`
 
       await deliver(customer, `Payment received — ${orgName}`, message)
     } catch (e) {
@@ -106,7 +113,7 @@ export class CustomerNotifyService {
    * readable 400s so the reminder button can tell the user what went wrong.
    * Returns what was sent for the UI to confirm.
    */
-  static async sendCreditReminder(organizationId: bigint, customerId: bigint) {
+  static async sendCreditReminder(organizationId: bigint, customerId: bigint, customTemplate?: string) {
     const { customer, orgName } = await loadCustomerAndOrg(organizationId, customerId)
     if (!customer) throw badRequest('Customer not found in this organization')
 
@@ -131,7 +138,14 @@ export class CustomerNotifyService {
     })
     const dueSince = oldestDue?.due_date && oldestDue.due_date < new Date() ? fmtDate(oldestDue.due_date) : null
 
-    const message = `Dear ${customer.name}, this is a friendly reminder from ${orgName}: your outstanding balance is ${fmtRwf(balance)}${dueSince ? ` (due since ${dueSince})` : ''}. Please visit us or contact us to arrange payment. Thank you.`
+    let message = `Dear ${customer.name}, this is a friendly reminder from ${orgName}: your outstanding balance is ${fmtRwf(balance)}${dueSince ? ` (due since ${dueSince})` : ''}. Please visit us or contact us to arrange payment. Thank you.`
+    if (customTemplate) {
+      message = customTemplate
+        .replace(/{name}/g, customer.name)
+        .replace(/{balance}/g, fmtRwf(balance))
+        .replace(/{orgName}/g, orgName)
+        .replace(/{dueSince}/g, dueSince ? dueSince : '');
+    }
 
     const channels = await deliver(customer, `Payment reminder — ${orgName}`, message)
 
@@ -149,7 +163,7 @@ export class CustomerNotifyService {
    * Bulk reminders: every customer with an outstanding balance (optionally
    * only those already past a due date, or explicitly selected customerIds). Returns a per-customer result list.
    */
-  static async sendCreditReminders(organizationId: bigint, onlyOverdue = false, customerIds?: string[]) {
+  static async sendCreditReminders(organizationId: bigint, onlyOverdue = false, customerIds?: string[], customTemplate?: string) {
     const whereClause: any = { organization_id: organizationId, deleted_at: null, current_balance: { gt: 0 } };
     if (customerIds && customerIds.length > 0) {
       whereClause.id = { in: customerIds.map(id => BigInt(id)) };
@@ -182,7 +196,7 @@ export class CustomerNotifyService {
     const results = []
     for (const c of targets) {
       try {
-        results.push({ ...(await this.sendCreditReminder(organizationId, c.id)), status: 'sent' })
+        results.push({ ...(await this.sendCreditReminder(organizationId, c.id, customTemplate)), status: 'sent' })
       } catch (e: any) {
         results.push({ customer_id: c.id.toString(), customer_name: c.name, balance: Number(c.current_balance), status: 'skipped', reason: e.message })
       }

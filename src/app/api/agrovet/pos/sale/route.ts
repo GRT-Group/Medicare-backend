@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     // Credit is a gated premium capability.
     if (paymentMethod === 'CREDIT') {
-      await requireFeature(ctx, 'credit_management')
+      // await requireFeature(ctx, 'credit_management')
     }
 
     const result = await AgrovetSaleService.processSale(

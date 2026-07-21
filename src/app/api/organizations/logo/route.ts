@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
     }
 
     const bytes = Buffer.from(await file.arrayBuffer())
-    const filename = `${id}/logo-${Date.now()}.${ext}`
+    const sanitizedOriginalName = file.name ? file.name.replace(/[^a-zA-Z0-9.-]/g, '_') : `logo-${Date.now()}.${ext}`
+    const filename = `${id}/${sanitizedOriginalName}`
 
     const { url: logoUrl } = await storeFile(LOGO_BUCKET, filename, bytes, file.type)
 

@@ -30,7 +30,7 @@ model AuditLog {
   request_id                        String?
   Branch                            Branch?      @relation(fields: [branch_id], references: [id])
   User_AuditLog_deleted_by_idToUser User?        @relation("AuditLog_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                      Organization @relation(fields: [organization_id], references: [id])
+  Organization                      Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   User_AuditLog_user_idToUser       User         @relation("AuditLog_user_idToUser", fields: [user_id], references: [id])
 }
 
@@ -60,7 +60,7 @@ model Branch {
   restore_allowed                                    Boolean             @default(true)
   AuditLog                                           AuditLog[]
   User_Branch_deleted_by_idToUser                    User?               @relation("Branch_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                                       Organization        @relation(fields: [organization_id], references: [id])
+  Organization                                       Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   CashSession                                        CashSession[]
   Cashbook                                           Cashbook[]
   InventoryMovement                                  InventoryMovement[]
@@ -73,6 +73,7 @@ model Branch {
   ActivityLog                                        ActivityLog[]
   DiscountRequest                                    DiscountRequest[]
   NotificationEvent                                  NotificationEvent[]
+  Employee                                           Employee[]
 }
 
 model CashSession {
@@ -95,7 +96,7 @@ model CashSession {
   Branch                               Branch?           @relation(fields: [branch_id], references: [id])
   User_CashSession_deleted_by_idToUser User?             @relation("CashSession_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
   User_CashSession_closed_by_idToUser  User?             @relation("CashSession_closed_by_idToUser", fields: [closed_by_id], references: [id])
-  Organization                         Organization      @relation(fields: [organization_id], references: [id])
+  Organization                         Organization      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   User_CashSession_user_idToUser       User              @relation("CashSession_user_idToUser", fields: [user_id], references: [id])
   Sale                                 Sale[]
 }
@@ -129,7 +130,7 @@ model Cashbook {
   Branch                            Branch?         @relation(fields: [branch_id], references: [id])
   User_Cashbook_created_by_idToUser User?           @relation("Cashbook_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Cashbook_deleted_by_idToUser User?           @relation("Cashbook_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                      Organization    @relation(fields: [organization_id], references: [id])
+  Organization                      Organization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -157,7 +158,7 @@ model Category {
   restore_allowed                   Boolean      @default(true)
   User_Category_created_by_idToUser User?        @relation("Category_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Category_deleted_by_idToUser User?        @relation("Category_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                      Organization @relation(fields: [organization_id], references: [id])
+  Organization                      Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   ProductType                       ProductType  @relation(fields: [product_type_id], references: [id])
   Product                           Product[]
 }
@@ -233,7 +234,7 @@ model Customer {
   User_Customer_created_by_idToUser User?                @relation("Customer_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Customer_updated_by_idToUser User?                @relation("Customer_updated_by_idToUser", fields: [updated_by_id], references: [id])
   User_Customer_deleted_by_idToUser User?                @relation("Customer_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                      Organization         @relation(fields: [organization_id], references: [id])
+  Organization                      Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   CustomerPayment                   CustomerPayment[]
   Sale                              Sale[]
   Quotation                         Quotation[]
@@ -256,7 +257,7 @@ model CustomerPayment {
   User_CustomerPayment_created_by_idToUser User          @relation("CustomerPayment_created_by_idToUser", fields: [created_by_id], references: [id])
   Customer                                 Customer      @relation(fields: [customer_id], references: [id])
   User_CustomerPayment_deleted_by_idToUser User?         @relation("CustomerPayment_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                             Organization  @relation(fields: [organization_id], references: [id])
+  Organization                             Organization  @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model CustomerPayment_RecycleBin {
@@ -323,7 +324,7 @@ model InventoryMovement {
   Branch                                     Branch?               @relation(fields: [branch_id], references: [id])
   User_InventoryMovement_created_by_idToUser User                  @relation("InventoryMovement_created_by_idToUser", fields: [created_by_id], references: [id])
   User_InventoryMovement_deleted_by_idToUser User?                 @relation("InventoryMovement_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                               Organization          @relation(fields: [organization_id], references: [id])
+  Organization                               Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Product                                    Product               @relation(fields: [product_id], references: [id])
 }
 
@@ -403,6 +404,10 @@ model Organization {
   Supplier                                Supplier[]
   User_User_organization_idToOrganization User[]                @relation("User_organization_idToOrganization")
   SupportTicket                           SupportTicket[]
+  Employee                                Employee[]
+  Attendance                              Attendance[]
+  Payroll                                 Payroll[]
+  ProductivityMetric                      ProductivityMetric[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -500,7 +505,7 @@ model Product {
   Brand                            Brand?              @relation(fields: [brand_id], references: [id])
   User_Product_created_by_idToUser User?               @relation("Product_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Product_deleted_by_idToUser User?               @relation("Product_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                     Organization        @relation(fields: [organization_id], references: [id])
+  Organization                     Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   ProductBatch                     ProductBatch[]
   QuotationItem                    QuotationItem[]
   PurchaseOrderItem                PurchaseOrderItem[]
@@ -544,7 +549,7 @@ model ProductBatch {
   restore_allowed    Boolean             @default(true)
   InventoryMovement  InventoryMovement[]
   User               User?               @relation(fields: [deleted_by_id], references: [id])
-  Organization       Organization        @relation(fields: [organization_id], references: [id])
+  Organization       Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Product            Product             @relation(fields: [product_id], references: [id])
   Supplier           Supplier?           @relation(fields: [supplier_id], references: [id])
   Return             Return[]
@@ -577,7 +582,7 @@ model ProductType {
   Category                             Category[]
   User_ProductType_created_by_idToUser User?        @relation("ProductType_created_by_idToUser", fields: [created_by_id], references: [id])
   User_ProductType_deleted_by_idToUser User?        @relation("ProductType_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                         Organization @relation(fields: [organization_id], references: [id])
+  Organization                         Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -618,7 +623,7 @@ model PurchaseOrder {
   expected_delivery_date                 DateTime?
   User_PurchaseOrder_created_by_idToUser User                @relation("PurchaseOrder_created_by_idToUser", fields: [created_by_id], references: [id])
   User_PurchaseOrder_deleted_by_idToUser User?               @relation("PurchaseOrder_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                           Organization        @relation(fields: [organization_id], references: [id])
+  Organization                           Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Supplier                               Supplier            @relation(fields: [supplier_id], references: [id])
   PurchaseOrderItem                      PurchaseOrderItem[]
 }
@@ -697,7 +702,7 @@ model Return {
   Branch                          Branch?      @relation(fields: [branch_id], references: [id])
   User_Return_created_by_idToUser User         @relation("Return_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Return_deleted_by_idToUser User?        @relation("Return_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                    Organization @relation(fields: [organization_id], references: [id])
+  Organization                    Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Product                         Product      @relation(fields: [product_id], references: [id])
   Sale                            Sale         @relation(fields: [sale_id], references: [id])
 }
@@ -795,7 +800,7 @@ model Sale {
   User_Sale_created_by_idToUser User          @relation("Sale_created_by_idToUser", fields: [created_by_id], references: [id])
   Customer                      Customer?     @relation(fields: [customer_id], references: [id])
   User_Sale_deleted_by_idToUser User?         @relation("Sale_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                  Organization  @relation(fields: [organization_id], references: [id])
+  Organization                  Organization  @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   items                         SaleItem[]
 }
 
@@ -871,7 +876,7 @@ model StockTransfer {
   User_StockTransfer_created_by_idToUser User                @relation("StockTransfer_created_by_idToUser", fields: [created_by_id], references: [id])
   User_StockTransfer_deleted_by_idToUser User?               @relation("StockTransfer_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
   from_branch                            Branch              @relation("StockTransfer_from_branch_idToBranch", fields: [from_branch_id], references: [id])
-  Organization                           Organization        @relation(fields: [organization_id], references: [id])
+  Organization                           Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   to_branch                              Branch              @relation("StockTransfer_to_branch_idToBranch", fields: [to_branch_id], references: [id])
   items                                  StockTransferItem[]
 }
@@ -939,7 +944,7 @@ model Subscription {
   restore_allowed                       Boolean               @default(true)
   User_Subscription_created_by_idToUser User?                 @relation("Subscription_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Subscription_deleted_by_idToUser User?                 @relation("Subscription_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                          Organization          @relation(fields: [organization_id], references: [id])
+  Organization                          Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   subscription_plan                     SubscriptionPlan?     @relation(fields: [plan_id], references: [id])
   SubscriptionPayment                   SubscriptionPayment[]
 }
@@ -981,7 +986,7 @@ model SubscriptionPayment {
   gateway_phone                                  String?
   gateway_checked_at                             DateTime?
   User_SubscriptionPayment_deleted_by_idToUser   User?         @relation("SubscriptionPayment_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                                   Organization  @relation(fields: [organization_id], references: [id])
+  Organization                                   Organization  @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   User_SubscriptionPayment_processed_by_idToUser User?         @relation("SubscriptionPayment_processed_by_idToUser", fields: [processed_by_id], references: [id])
   subscription                                   Subscription  @relation(fields: [subscription_id], references: [id])
 }
@@ -1097,11 +1102,11 @@ model Supplier {
   /// INDIVIDUAL: free-text experience band (e.g. "1-3 years").
   experience_level                  String?
   preferred_payment_method          String?
-  currency                          String?          @default("RWF")
+  currency                          String?           @default("RWF")
   credit_limit                      Decimal?          @db.Decimal(15, 2)
   lead_time_days                    Int?
   minimum_order_value               Decimal?          @db.Decimal(15, 2)
-  delivery_availability              String?
+  delivery_availability             String?
   internal_notes                    String?
   outstanding_balance               Decimal           @default(0) @db.Decimal(15, 2)
   status                            String            @default("ACTIVE")
@@ -1124,7 +1129,7 @@ model Supplier {
   SupplierPayment                   SupplierPayment[]
   User_Supplier_created_by_idToUser User?             @relation("Supplier_created_by_idToUser", fields: [created_by_id], references: [id])
   User_Supplier_deleted_by_idToUser User?             @relation("Supplier_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                      Organization      @relation(fields: [organization_id], references: [id])
+  Organization                      Organization      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1233,7 +1238,7 @@ model User {
   Branch_User_branch_idToBranch                                 Branch?               @relation("User_branch_idToBranch", fields: [branch_id], references: [id])
   User                                                          User?                 @relation("UserToUser", fields: [deleted_by_id], references: [id])
   other_User                                                    User[]                @relation("UserToUser")
-  organization                                                  Organization?         @relation("User_organization_idToOrganization", fields: [organization_id], references: [id])
+  organization                                                  Organization?         @relation("User_organization_idToOrganization", fields: [organization_id], references: [id], onDelete: Cascade)
   role                                                          UserRole              @relation("User_role_idToUserRole", fields: [role_id], references: [id])
   UserPermission_UserPermission_assigned_by_idToUser            UserPermission[]      @relation("UserPermission_assigned_by_idToUser")
   UserPermission_UserPermission_deleted_by_idToUser             UserPermission[]      @relation("UserPermission_deleted_by_idToUser")
@@ -1246,6 +1251,8 @@ model User {
   UserSession_UserSession_user_idToUser                         UserSession[]         @relation("UserSession_user_idToUser")
   VerificationToken_VerificationToken_deleted_by_idToUser       VerificationToken[]   @relation("VerificationToken_deleted_by_idToUser")
   VerificationToken_VerificationToken_user_idToUser             VerificationToken[]   @relation("VerificationToken_user_idToUser")
+  Employee                                                      Employee[]
+  ProductivityMetric_evaluator                                  ProductivityMetric[]  @relation("ProductivityMetric_evaluator")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1527,7 +1534,7 @@ model Brand {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Product      Product[]
 }
 
@@ -1544,7 +1551,7 @@ model Manufacturer {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model UnitOfMeasure {
@@ -1561,7 +1568,7 @@ model UnitOfMeasure {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model TaxCategory {
@@ -1578,7 +1585,7 @@ model TaxCategory {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model ExpenseCategory {
@@ -1594,7 +1601,7 @@ model ExpenseCategory {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model CustomerGroup {
@@ -1611,7 +1618,7 @@ model CustomerGroup {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model SupplierCategory {
@@ -1627,7 +1634,7 @@ model SupplierCategory {
   is_deleted      Boolean   @default(false)
   restore_allowed Boolean   @default(true)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
 }
 
 model ProductHistory {
@@ -1665,7 +1672,7 @@ model ApprovalWorkflow {
   is_deleted      Boolean  @default(false)
   restore_allowed Boolean  @default(true)
 
-  organization Organization      @relation(fields: [organization_id], references: [id])
+  organization Organization      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   requests     ApprovalRequest[]
 }
 
@@ -1710,7 +1717,7 @@ model ActivityLog {
   browser_info    String?
   timestamp       DateTime @default(now())
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   branch       Branch?      @relation(fields: [branch_id], references: [id])
   user         User         @relation(fields: [user_id], references: [id])
 }
@@ -1728,7 +1735,7 @@ model DocumentAttachment {
   created_at      DateTime @default(now())
   is_deleted      Boolean  @default(false)
 
-  organization Organization @relation(fields: [organization_id], references: [id])
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   uploaded_by  User         @relation(fields: [uploaded_by_id], references: [id])
 }
 
@@ -1752,7 +1759,7 @@ model Quotation {
   User_Quotation_created_by_idToUser User            @relation("Quotation_created_by_idToUser", fields: [created_by_id], references: [id])
   Customer                           Customer?       @relation(fields: [customer_id], references: [id])
   User_Quotation_deleted_by_idToUser User?           @relation("Quotation_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
-  Organization                       Organization    @relation(fields: [organization_id], references: [id])
+  Organization                       Organization    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   items                              QuotationItem[]
 }
 
@@ -1817,7 +1824,7 @@ model SupportTicket {
   deleted_at       DateTime?
   is_deleted       Boolean        @default(false)
 
-  Organization                            Organization @relation(fields: [organization_id], references: [id])
+  Organization                            Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   User_SupportTicket_created_by_idToUser  User         @relation("SupportTicket_created_by_idToUser", fields: [created_by_id], references: [id])
   User_SupportTicket_assigned_to_idToUser User?        @relation("SupportTicket_assigned_to_idToUser", fields: [assigned_to_id], references: [id])
   User_SupportTicket_deleted_by_idToUser  User?        @relation("SupportTicket_deleted_by_idToUser", fields: [deleted_by_id], references: [id])
@@ -1872,7 +1879,7 @@ model DiscountRequest {
   created_at      DateTime              @default(now())
   reviewed_at     DateTime?
 
-  Organization Organization @relation(fields: [organization_id], references: [id])
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Branch       Branch?      @relation(fields: [branch_id], references: [id])
   RequestedBy  User         @relation("DiscountRequest_requested_by", fields: [requested_by_id], references: [id])
   ReviewedBy   User?        @relation("DiscountRequest_reviewed_by", fields: [reviewed_by_id], references: [id])
@@ -1897,7 +1904,7 @@ model NotificationEvent {
   is_read         Boolean  @default(false)
   created_at      DateTime @default(now())
 
-  Organization Organization @relation(fields: [organization_id], references: [id])
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Branch       Branch?      @relation(fields: [branch_id], references: [id])
 
   @@index([organization_id, is_read])
@@ -1917,9 +1924,186 @@ model SupplierPayment {
   created_by_id   BigInt
   created_at      DateTime      @default(now())
 
-  Organization Organization @relation(fields: [organization_id], references: [id])
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   Supplier     Supplier     @relation(fields: [supplier_id], references: [id])
   CreatedBy    User         @relation("SupplierPayment_created_by", fields: [created_by_id], references: [id])
 
   @@index([organization_id, supplier_id])
+}
+
+// =====================================================================
+// HR & PAYROLL EXTENSION MODELS
+// =====================================================================
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+}
+
+enum PayrollStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model Employee {
+  id              BigInt         @id @default(autoincrement())
+  organization_id BigInt
+  branch_id       BigInt?
+  user_id         BigInt?        @unique
+  employee_code   String         @unique
+  first_name      String
+  last_name       String
+  email           String?
+  phone           String?
+  department      String?
+  designation     String?
+  hire_date       DateTime       @default(now())
+  status          EmployeeStatus @default(ACTIVE)
+  base_salary     Decimal        @default(0) @db.Decimal(15, 2)
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+  is_deleted      Boolean        @default(false)
+
+  Organization Organization         @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Branch       Branch?              @relation(fields: [branch_id], references: [id])
+  User         User?                @relation(fields: [user_id], references: [id])
+  Attendance   Attendance[]
+  Payroll      Payroll[]
+  Productivity ProductivityMetric[]
+}
+
+model Attendance {
+  id              BigInt           @id @default(autoincrement())
+  organization_id BigInt
+  employee_id     BigInt
+  date            DateTime         @db.Date
+  clock_in        DateTime?
+  clock_out       DateTime?
+  status          AttendanceStatus @default(PRESENT)
+  notes           String?
+  created_at      DateTime         @default(now())
+
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Employee     Employee     @relation(fields: [employee_id], references: [id])
+
+  @@unique([employee_id, date])
+}
+
+model Payroll {
+  id              BigInt        @id @default(autoincrement())
+  organization_id BigInt
+  employee_id     BigInt
+  period_start    DateTime      @db.Date
+  period_end      DateTime      @db.Date
+  basic_salary    Decimal       @db.Decimal(15, 2)
+  allowances      Decimal       @default(0) @db.Decimal(15, 2)
+  deductions      Decimal       @default(0) @db.Decimal(15, 2)
+  net_salary      Decimal       @db.Decimal(15, 2)
+  status          PayrollStatus @default(PENDING)
+  payment_date    DateTime?
+  payment_method  PaymentMethod @default(BANK_TRANSFER)
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Employee     Employee     @relation(fields: [employee_id], references: [id])
+}
+
+model ProductivityMetric {
+  id              BigInt   @id @default(autoincrement())
+  organization_id BigInt
+  employee_id     BigInt
+  metric_type     String
+  metric_value    Decimal  @db.Decimal(15, 2)
+  date            DateTime @db.Date
+  evaluator_id    BigInt?
+  notes           String?
+  created_at      DateTime @default(now())
+
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Employee     Employee     @relation(fields: [employee_id], references: [id])
+  Evaluator    User?        @relation("ProductivityMetric_evaluator", fields: [evaluator_id], references: [id])
+}
+
+model Employee_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  branch_id       BigInt?
+  user_id         BigInt?
+  employee_code   String?
+  first_name      String?
+  last_name       String?
+  email           String?
+  phone           String?
+  department      String?
+  designation     String?
+  hire_date       DateTime?
+  status          String?
+  base_salary     Decimal?  @db.Decimal(15, 2)
+  created_at      DateTime?
+  updated_at      DateTime? @updatedAt
+  is_deleted      Boolean?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model Attendance_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  employee_id     BigInt?
+  date            DateTime? @db.Date
+  clock_in        DateTime?
+  clock_out       DateTime?
+  status          String?
+  notes           String?
+  created_at      DateTime?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model Payroll_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  employee_id     BigInt?
+  period_start    DateTime? @db.Date
+  period_end      DateTime? @db.Date
+  basic_salary    Decimal?  @db.Decimal(15, 2)
+  allowances      Decimal?  @db.Decimal(15, 2)
+  deductions      Decimal?  @db.Decimal(15, 2)
+  net_salary      Decimal?  @db.Decimal(15, 2)
+  status          String?
+  payment_date    DateTime?
+  payment_method  String?
+  created_at      DateTime?
+  updated_at      DateTime? @updatedAt
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model ProductivityMetric_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  employee_id     BigInt?
+  metric_type     String?
+  metric_value    Decimal?  @db.Decimal(15, 2)
+  date            DateTime? @db.Date
+  evaluator_id    BigInt?
+  notes           String?
+  created_at      DateTime?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
 }

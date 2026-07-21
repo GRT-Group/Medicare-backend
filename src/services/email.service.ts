@@ -353,9 +353,166 @@ export class EmailService {
       <p>Current plan: <strong>${planName}</strong></p>
       ${linkHtml}
       <p>If you have already renewed, please disregard this message.</p>
-    `
+    `;
     const html = this.getBaseEmailTemplate(subject, content)
 
     return this.sendEmail(to, subject, html, text)
+  }
+
+  /**
+   * Send a confirmation email to the administrator who created the support ticket.
+   */
+  static async sendSupportTicketCreatedToAdmin(
+    to: string,
+    adminName: string,
+    subject: string,
+    ticketId: string | number
+  ) {
+    const emailSubject = `✅ Support Ticket Received: ${subject}`;
+    const text = `Hello ${adminName}, we have received your support ticket (${ticketId}) regarding "${subject}". Our team will get back to you shortly.`;
+    const content = `
+      <h2>Ticket Successfully Submitted</h2>
+      <p>Hello <strong>${adminName}</strong>,</p>
+      <p>This is to confirm that we have successfully received your support ticket.</p>
+      <table style="width:100%;margin-bottom:20px;">
+        <tr><td style="color:#64748b;">Ticket ID</td><td><strong>#${ticketId}</strong></td></tr>
+        <tr><td style="color:#64748b;">Subject</td><td><strong>${subject}</strong></td></tr>
+      </table>
+      <p>Our support team will review your request and get back to you as soon as possible.</p>
+      <p>Thank you for your patience.</p>
+    `;
+    const html = this.getBaseEmailTemplate(emailSubject, content);
+    
+    return this.sendEmail(to, emailSubject, html, text);
+  }
+
+  /**
+   * Send a notification email to the super admin when a new ticket is submitted.
+   */
+  static async sendSupportTicketCreatedToSuperAdmin(
+    to: string | string[],
+    orgName: string,
+    adminName: string,
+    subject: string,
+    priority: string,
+    ticketId: string | number
+  ) {
+    const emailSubject = `🚨 New Support Ticket: ${subject} (${orgName})`;
+    const text = `A new support ticket (#${ticketId}) has been submitted by ${adminName} from ${orgName}. Priority: ${priority}. Subject: ${subject}.`;
+    const content = `
+      <h2>New Support Ticket Submitted</h2>
+      <p>A new support ticket has been raised by <strong>${adminName}</strong> from <strong>${orgName}</strong>.</p>
+      <table style="width:100%;margin-bottom:20px; border-collapse:collapse;">
+        <tr><td style="padding:8px; border-bottom:1px solid #e2e8f0; color:#64748b;">Ticket ID</td><td style="padding:8px; border-bottom:1px solid #e2e8f0;"><strong>#${ticketId}</strong></td></tr>
+        <tr><td style="padding:8px; border-bottom:1px solid #e2e8f0; color:#64748b;">Organization</td><td style="padding:8px; border-bottom:1px solid #e2e8f0;"><strong>${orgName}</strong></td></tr>
+        <tr><td style="padding:8px; border-bottom:1px solid #e2e8f0; color:#64748b;">Subject</td><td style="padding:8px; border-bottom:1px solid #e2e8f0;"><strong>${subject}</strong></td></tr>
+        <tr><td style="padding:8px; border-bottom:1px solid #e2e8f0; color:#64748b;">Priority</td><td style="padding:8px; border-bottom:1px solid #e2e8f0;"><strong>${priority}</strong></td></tr>
+      </table>
+      <p>Please log in to the admin portal to review and assign this ticket.</p>
+    `;
+    const html = this.getBaseEmailTemplate(emailSubject, content);
+    
+    // If it's an array of emails, we might send them one by one or comma-separated depending on Resend's support.
+    // Resend supports up to 50 emails in 'to' as an array.
+    return this.sendEmail(Array.isArray(to) ? to.join(', ') : to, emailSubject, html, text);
+  }
+
+  /**
+   * Send an email to the administrator when a ticket is updated or replied to.
+   */
+  static async sendSupportTicketReplyToAdmin(
+    to: string,
+    adminName: string,
+    subject: string,
+    replyMessage: string,
+    newStatus: string,
+    ticketId: string | number,
+    originalMessage?: string
+  ) {
+    const emailSubject = `Update on your Support Ticket: ${subject}`;
+    const text = `Hello ${adminName}, there is an update on your support ticket (#${ticketId}). Status: ${newStatus}. Reply: ${replyMessage}`;
+    
+    let originalSection = '';
+    if (originalMessage) {
+      originalSection = `
+        <div style="background-color: #f1f5f9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+          <p style="margin-top:0; color:#475569; font-size:13px; text-transform: uppercase; font-weight: bold;"><strong>Your Original Issue:</strong></p>
+          <p style="margin-bottom:0; color:#334155; font-size:14px;">"${originalMessage.replace(/\n/g, '<br>')}"</p>
+        </div>
+      `;
+    }
+
+    let replySection = '';
+    if (replyMessage) {
+      replySection = `
+        <div style="background-color: #f8fafc; border-left: 4px solid #14A39A; padding: 15px; margin: 20px 0;">
+          <p style="margin-top:0; color:#64748b; font-size:14px;"><strong>Support Team Response:</strong></p>
+          <p style="margin-bottom:0; font-style: italic;">"${replyMessage.replace(/\n/g, '<br>')}"</p>
+        </div>
+      `;
+    }
+
+    const content = `
+      <h2>Ticket Update</h2>
+      <p>Hello <strong>${adminName}</strong>,</p>
+      <p>There has been an update regarding your support ticket (<strong>#${ticketId}</strong> - ${subject}).</p>
+      <p>Current Status: <strong style="color: #14A39A;">${newStatus}</strong></p>
+      ${originalSection}
+      ${replySection}
+      <p>If you have any further questions, please feel free to reply or log into the portal.</p>
+    `;
+    const html = this.getBaseEmailTemplate(emailSubject, content);
+    
+    return this.sendEmail(to, emailSubject, html, text);
+  }
+
+  /**
+   * Send Subscription Invoice
+   */
+  static async sendInvoice(
+    to: string,
+    organizationName: string,
+    planName: string,
+    amount: number,
+    startDate: Date,
+    endDate: Date,
+    referenceId: string
+  ) {
+    const subject = '🧾 Your MedicareOne Subscription Invoice';
+    const text = `Hello, here is your invoice for the ${planName} subscription. Amount: ${amount}. Start Date: ${startDate.toLocaleDateString()}, End Date: ${endDate.toLocaleDateString()}.`;
+    
+    const content = `
+      <h2>Subscription Confirmed!</h2>
+      <p>Hello <strong>${organizationName}</strong>,</p>
+      <p>Thank you for subscribing to MediCare ONE. Your payment was successful, and your account is now active.</p>
+      <div style="background: #f0fdfa; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px dashed #14A39A;">
+        <h3 style="margin-top: 0; color: #14A39A; font-size: 20px;">Invoice Details</h3>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; font-weight: bold; color: #475569;">Reference:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; color: #0f172a;">${referenceId}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; font-weight: bold; color: #475569;">Plan:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; color: #0f172a;">${planName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; font-weight: bold; color: #475569;">Amount Paid:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; color: #0f172a;">RWF ${amount.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; font-weight: bold; color: #475569;">Start Date:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #ccfbf1; color: #0f172a;">${startDate.toDateString()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Valid Until:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${endDate.toDateString()}</td>
+          </tr>
+        </table>
+      </div>
+      <p>You can now log in and access all premium features.</p>
+    `;
+    const html = this.getBaseEmailTemplate(subject, content);
+    return this.sendEmail(to, subject, html, text);
   }
 }

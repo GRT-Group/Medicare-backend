@@ -86,6 +86,17 @@ export async function resolveContext(req: NextRequest): Promise<AgrovetContext> 
       select: { id: true },
     })
     if (!branch) throw new ApiError(403, 'Forbidden: branch not in your organization')
+  } else {
+    // If no branch is explicitly selected or set as home, check if the org only has ONE branch.
+    // If so, use it automatically to prevent "No branch selected" errors for single-branch tenants.
+    const branches = await prisma.branch.findMany({
+      where: { organization_id: organizationId, is_deleted: false },
+      select: { id: true },
+      take: 2,
+    })
+    if (branches.length === 1) {
+      branchId = branches[0].id
+    }
   }
 
   return { userId, roleId: user.role_id, organizationId, branchId, isSuperAdmin }

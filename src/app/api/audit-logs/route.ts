@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ArchiveService } from '@/services/archive.service';
 import { getBearerToken, verifyBearerToken } from '@/lib/auth-utils';
 import { PermissionService } from '@/services/permission.service';
+import { AuditService } from '@/services/audit.service';
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const token = getBearerToken(req.headers);
     if (!token) {
@@ -22,40 +22,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Forbidden: Requires Admin privileges' }, { status: 403 });
     }
 
-    const body = await req.json();
-    const { entityType, entityId } = body;
-
     let organizationId = decoded.organization_id;
-    if (PermissionService.isSuperAdmin(roleId) && body.organizationId) {
-      organizationId = body.organizationId;
+    const searchParams = req.nextUrl.searchParams;
+    
+    if (PermissionService.isSuperAdmin(roleId) && searchParams.get('organization_id')) {
+      organizationId = searchParams.get('organization_id');
     }
 
     if (!organizationId && !PermissionService.isSuperAdmin(roleId)) {
       return NextResponse.json({ success: false, error: 'Forbidden: No organization assigned to your account' }, { status: 403 });
     }
 
-    if (!entityType || !entityId) {
-      return NextResponse.json({ success: false, error: 'entityType and entityId are required' }, { status: 400 });
-    }
-
     const targetOrgId = organizationId ? BigInt(organizationId) : BigInt(0);
-    const adminId = BigInt(decoded.id);
+    const limit = searchParams.get('limit') ? Number(searchParams.get('limit')) : 50;
+    const offset = searchParams.get('offset') ? Number(searchParams.get('offset')) : 0;
 
-    const result = await ArchiveService.restore(targetOrgId, entityType as any, BigInt(entityId), adminId);
+    const result = await AuditService.list(targetOrgId, { limit, offset });
 
     return NextResponse.json({
       success: true,
-      message: `${entityType} restored successfully`,
-      data: { ...result, id: result.id.toString() }
+      data: result.items
     }, { status: 200 });
 
   } catch (error: any) {
-    const message = typeof error?.message === 'string' ? error.message : 'Restore failed';
-    const status = /not found/i.test(message)
-      ? 404
-      : /already deleted|is not deleted|permanently locked/i.test(message)
-        ? 400
-        : 500;
-    return NextResponse.json({ success: false, error: message }, { status });
+    const message = typeof error?.message === 'string' ? error.message : 'Failed to fetch audit logs';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

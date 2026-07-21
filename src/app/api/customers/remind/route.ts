@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const onlyOverdue = body?.only_overdue === true || body?.onlyOverdue === true;
     const customerIds = Array.isArray(body?.customer_ids) ? body.customer_ids : undefined;
+    const customTemplate = body?.message_template;
 
-    const summary = await CustomerNotifyService.sendCreditReminders(BigInt(orgId), onlyOverdue, customerIds);
+    const summary = await CustomerNotifyService.sendCreditReminders(BigInt(orgId), onlyOverdue, customerIds, customTemplate);
 
     return NextResponse.json({
       success: true,

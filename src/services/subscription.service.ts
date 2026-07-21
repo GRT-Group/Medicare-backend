@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { OrganizationStatus, PaymentMethod, PaymentStatus, SubscriptionStatus } from '@prisma/client';
 import { initiateCollection, checkStatus, normalizeLmbtechStatus } from './lmbtech.service';
+import { EmailService } from './email.service';
 
 /**
  * The public base URL this server is reachable at — required for LMBTech's
@@ -239,7 +240,7 @@ export class SubscriptionService {
   }
 
   static async approveSubscription(paymentId: bigint, adminId?: bigint) {
-    return prisma.$transaction(async (tx) => {
+    const invoiceData = await prisma.$transaction(async (tx) => {
       const payment = await tx.subscriptionPayment.findUniqueOrThrow({
         where: { id: paymentId },
         include: { subscription: true }
@@ -276,16 +277,38 @@ export class SubscriptionService {
         }
       });
 
-      await tx.organization.update({
+      const org = await tx.organization.update({
         where: { id: payment.organization_id },
         data: { lifecycle_status: OrganizationStatus.ACTIVE }
       });
 
-      return true;
+      return {
+        email: org.email,
+        organizationName: org.name,
+        planName: payment.plan_name,
+        amount: Number(payment.amount),
+        startDate: now,
+        endDate: endDate,
+        referenceId: payment.gateway_reference || ("SUB-" + payment.id.toString())
+      };
     }, {
       maxWait: 10000,
       timeout: 20000
     });
+
+    if (invoiceData.email) {
+      EmailService.sendInvoice(
+        invoiceData.email,
+        invoiceData.organizationName || 'Valued Customer',
+        invoiceData.planName || 'Subscription',
+        invoiceData.amount,
+        invoiceData.startDate,
+        invoiceData.endDate,
+        invoiceData.referenceId
+      ).catch(err => console.error("Failed to send invoice email:", err));
+    }
+
+    return true;
   }
 
   static async rejectSubscription(paymentId: bigint, adminId: bigint) {

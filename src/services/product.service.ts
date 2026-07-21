@@ -110,7 +110,11 @@ export class ProductService {
     return prisma.product.findMany({
       where,
       include: {
-        Category: true,
+        Category: {
+          include: {
+            ProductType: { select: { id: true, name: true } }
+          }
+        },
         ProductBatch: {
           where: { deleted_at: null, quantity_remaining: { gt: 0 } },
           orderBy: { expiry_date: 'asc' }

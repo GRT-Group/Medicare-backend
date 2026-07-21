@@ -287,12 +287,17 @@ export class AuthService {
           { public_id: identifier }
         ]
       },
-      include: { role: true }
+      include: { role: true, organization: true }
     })
     if (!user) throw new Error('Invalid credentials')
 
     const isValid = await bcrypt.compare(password, user.password_hash)
     if (!isValid) throw new Error('Invalid credentials')
+
+    // Enforce organization activation
+    if (user.organization && user.organization.lifecycle_status === 'PENDING_VERIFICATION') {
+      throw new Error('Please activate your account first before logging in.')
+    }
 
     if (user.status !== 'ACTIVE' && user.status !== 'PENDING_ONBOARDING') {
       throw new Error(`Account is ${user.status}. Please contact support.`)
@@ -343,7 +348,7 @@ export class AuthService {
       role_id: user.role_id.toString(),
       organization_id: user.organization_id?.toString(),
     }
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' })
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '5h' })
 
     // 4. Save session in database
     await prisma.userSession.create({
@@ -351,7 +356,7 @@ export class AuthService {
         user_id: user.id,
         organization_id: user.organization_id,
         session_token: token,
-        expires_at: new Date(Date.now() + 60 * 60 * 1000),
+        expires_at: new Date(Date.now() + 5 * 60 * 60 * 1000), // 5 hours
         ip_address: ipAddress,
         user_agent: userAgent,
         status: 'ACTIVE',

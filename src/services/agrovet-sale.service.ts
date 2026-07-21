@@ -94,21 +94,28 @@ export class AgrovetSaleService {
       const remaining = netTotal - amountPaid
 
       if (data.payment_method === 'CREDIT' || remaining > 0) {
-        if (!data.customer_id) throw badRequest('A registered customer is required for credit sales')
-        const customer = await tx.customer.findFirst({ where: { id: data.customer_id, organization_id: organizationId } })
-        if (!customer) throw badRequest('Customer not found in this organization')
+        if (!data.customer_id) {
+          if (data.payment_method === 'CREDIT') {
+            throw badRequest('A registered customer is required for credit sales')
+          }
+          // For non-CREDIT, Walk-in is allowed to have an unpaid balance (e.g. pay later at the register).
+        } else {
+          const customer = await tx.customer.findFirst({ where: { id: data.customer_id, organization_id: organizationId } })
+          if (!customer) throw badRequest('Customer not found in this organization')
 
-        const newBalance = Number(customer.current_balance) + remaining
-        const limit = Number(customer.credit_limit)
-        // HARD STOP: a customer with no positive credit limit cannot carry a
-        // balance at all, and no sale may push the balance past the limit.
-        if (limit <= 0) {
-          throw badRequest('Credit denied: customer has no approved credit limit')
+          const newBalance = Number(customer.current_balance) + remaining
+          const limit = Number(customer.credit_limit)
+          
+          if (data.payment_method === 'CREDIT') {
+            if (limit <= 0) {
+              throw badRequest('Credit denied: customer has no approved credit limit')
+            }
+            if (newBalance > limit) {
+              throw badRequest(`Credit limit exceeded: balance ${newBalance} would exceed limit ${limit}`)
+            }
+          }
+          await tx.customer.update({ where: { id: customer.id }, data: { current_balance: newBalance } })
         }
-        if (newBalance > limit) {
-          throw badRequest(`Credit limit exceeded: balance ${newBalance} would exceed limit ${limit}`)
-        }
-        await tx.customer.update({ where: { id: customer.id }, data: { current_balance: newBalance } })
       }
 
       // --- VAT (VAT-inclusive) ---
