@@ -137,7 +137,6 @@ Once a quotation is created, the "View" page should expose the following workflo
 ```
 
 ---
-
 ## 5. UI/UX Professionalism Guidelines
 
 To ensure the interface meets the "professional" requirement:
