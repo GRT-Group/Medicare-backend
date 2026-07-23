@@ -417,6 +417,7 @@ model Organization {
   Payroll                                 Payroll[]
   ProductivityMetric                      ProductivityMetric[]
   StockCount                              StockCount[]
+  Message                                 Message[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1328,6 +1329,10 @@ model User {
   Employee                                                      Employee[]
   ProductivityMetric_evaluator                                  ProductivityMetric[]  @relation("ProductivityMetric_evaluator")
   StockCount                                                    StockCount[]
+  is_online                                                     Boolean               @default(false)
+  last_active_at                                                DateTime?
+  Message_senderToUser                                          Message[]             @relation("Message_senderToUser")
+  Message_receiverToUser                                        Message[]             @relation("Message_receiverToUser")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -2209,6 +2214,40 @@ model ProductivityMetric_RecycleBin {
   evaluator_id    BigInt?
   notes           String?
   created_at      DateTime?
+  deleted_at      DateTime  @default(now())
+  original_id     BigInt?
+  snapshot        Json?
+}
+
+model Message {
+  id              BigInt    @id @default(autoincrement())
+  organization_id BigInt
+  sender_id       BigInt
+  receiver_id     BigInt
+  content         String    @db.Text
+  is_edited       Boolean   @default(false)
+  is_deleted      Boolean   @default(false)
+  is_read         Boolean   @default(false)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_at      DateTime?
+
+  Organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  Sender       User         @relation("Message_senderToUser", fields: [sender_id], references: [id])
+  Receiver     User         @relation("Message_receiverToUser", fields: [receiver_id], references: [id])
+}
+
+model Message_RecycleBin {
+  id              BigInt    @id
+  organization_id BigInt?
+  sender_id       BigInt?
+  receiver_id     BigInt?
+  content         String?   @db.Text
+  is_edited       Boolean?
+  is_deleted      Boolean?
+  is_read         Boolean?
+  created_at      DateTime?
+  updated_at      DateTime?
   deleted_at      DateTime  @default(now())
   original_id     BigInt?
   snapshot        Json?

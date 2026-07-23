@@ -108,9 +108,12 @@ export async function POST(req: Request) {
       if (isNaN(dueDate.getTime())) return badRequestResponse('due_date must be a valid date');
     }
 
-    const sale = await SaleService.processSale(BigInt(orgId), {
+    const result = await SaleService.processSale(BigInt(orgId), {
       customer_id: customerIdBig,
       branch_id: branchIdBig,
+      cash_session_id: parseOptionalId(body.cash_session_id ?? body.cashSessionId, 'cash_session_id'),
+      discount_request_id: parseOptionalId(body.discount_request_id ?? body.discountRequestId, 'discount_request_id'),
+      client_ref: body.client_ref ?? body.clientRef,
       payment_method: paymentMethod,
       amount_paid: amountPaidNum,
       due_date: dueDate,
@@ -118,11 +121,13 @@ export async function POST(req: Request) {
       items,
     }, BigInt(adminId));
 
-    // Return the sale with full detail (line items + product names, customer,
-    // branch) so the POS can render the receipt from this one response.
-    const fullSale = await SaleService.getSaleById(sale.id, BigInt(orgId));
-
-    return NextResponse.json({ success: true, message: 'Sale processed successfully', sale: fullSale ?? sale }, { status: 201 });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Sale processed successfully', 
+      sale: result.sale,
+      ebm: result.ebm,
+      duplicate: result.duplicate
+    }, { status: 201 });
   } catch (error: any) {
     return apiError(error);
   }

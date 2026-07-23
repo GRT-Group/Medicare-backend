@@ -68,15 +68,9 @@ export function parseSaleItem(raw: any, index: number): ParsedSaleItem {
     }
   }
 
-  const batchIdRaw = raw?.batch_id ?? raw?.batchId
-  let batchId: bigint | undefined
-  if (batchIdRaw !== undefined && batchIdRaw !== null && batchIdRaw !== '') {
-    try {
-      batchId = BigInt(batchIdRaw)
-    } catch {
-      throw badRequest(`${label}: batch_id must be a numeric ID (got "${batchIdRaw}")`)
-    }
-  }
+  // Enforce Backend FIFO/FEFO: Ignore any batchId sent by the frontend 
+  // so the backend services always automatically select the oldest batches.
+  const batchId = undefined;
 
   return { product_id: productId, batch_id: batchId, quantity, unit_price: unitPrice }
 }

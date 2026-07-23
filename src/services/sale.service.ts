@@ -3,6 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { badRequest } from '@/lib/api-error';
 import { InventoryService } from '@/services/inventory.service';
+import { AuditService } from '@/services/audit.service';
+import { AlertService } from '@/services/alert.service';
+import { DiscountService } from '@/services/discount.service';
+import { getEbmProvider } from '@/services/ebm/ebm.provider';
+import { ebmConfig } from '@/services/ebm/ebm.config';
+
+const LARGE_SALE_THRESHOLD = Number(process.env.AGROVET_LARGE_SALE_THRESHOLD || 500000);
 
 const VALID_CUSTOMER_TYPES = ['Individual', 'Farmer', 'Cooperative', 'Company', 'Vet_Clinic'];
 const VALID_CUSTOMER_STATUSES = ['Active', 'Inactive', 'Blacklisted'];
@@ -383,7 +390,7 @@ export class SaleService {
   static async createCustomer(organizationId: bigint, data: {
     full_name?: string;
     name?: string;
-    phone: string;
+    phone?: string;
     email?: string;
     address?: string;
     tax_id?: string;
@@ -391,7 +398,7 @@ export class SaleService {
     district?: string;
     sector?: string;
     customer_type?: string;
-    credit_limit: number;
+    credit_limit?: number;
     payment_terms?: number;
     credit_status?: string;
     notes?: string;
@@ -399,8 +406,6 @@ export class SaleService {
   }, adminId?: bigint) {
     const fullName = data.full_name ?? data.name;
     if (!fullName) throw new Error('full_name is required');
-    if (!data.phone) throw new Error('phone is required');
-    if (data.credit_limit === undefined || data.credit_limit === null) throw new Error('credit_limit is required');
     assertValidCustomerType(data.customer_type);
     assertValidCreditStatus(data.credit_status);
 
@@ -419,7 +424,7 @@ export class SaleService {
         district: data.district,
         sector: data.sector,
         customer_type_v2: (data.customer_type as any) || 'Individual',
-        credit_limit: data.credit_limit,
+        credit_limit: data.credit_limit ?? 0,
         payment_terms: data.payment_terms ?? 0,
         credit_status: (data.credit_status as any) || 'Active',
         notes: data.notes,
@@ -548,35 +553,42 @@ export class SaleService {
   static async processSale(organizationId: bigint, data: {
     customer_id?: bigint;
     branch_id?: bigint;
+    cash_session_id?: bigint;
     payment_method: string; // 'CASH', 'CREDIT', 'MOMO', 'CARD', 'BANK_TRANSFER', 'MANUAL_INVOICE'
     amount_paid?: number;
     due_date?: Date;
+    discount_request_id?: bigint;
+    client_ref?: string;
     allocation_strategy?: 'FIFO' | 'LIFO' | 'FEFO'; // default to FEFO
     items: {
       product_id: bigint;
-      /** Optional: the batch the cashier picked on screen — deducted first when given. */
       batch_id?: bigint;
       quantity: number;
-      /** Optional: when omitted, priced from the batch selling price (falling back to the product base price). */
       unit_price?: number;
     }[];
   }, adminId: bigint) {
-    // The DB is remote (Supabase eu-west-1), so every round trip costs
-    // ~100-200ms. The old implementation issued 3+ sequential queries PER
-    // batch consumed (update + saleItem.create + movement.create), making a
-    // small sale take multiple seconds. This version does a fixed number of
-    // set-based queries regardless of item/batch count:
-    //   1 products fetch -> 1 batches fetch -> in-memory FIFO allocation ->
-    //   1 sale create -> 1 saleItem.createMany -> 1 movement.createMany ->
-    //   1 batch UPDATE.
+    if (!data.items?.length) throw badRequest('A sale must have at least one item');
+    if (!data.branch_id) throw badRequest('branch_id is required');
+
+    // Idempotency check for offline POS clients
+    if (data.client_ref) {
+      const existing = await prisma.sale.findFirst({
+        where: { organization_id: organizationId, invoice_number: `INV-${data.client_ref}` },
+        include: { items: true },
+      });
+      if (existing) {
+        const full = await this.getSaleReceipt(organizationId, existing.id);
+        return { sale: full, ebm: { success: existing.ebm_status === 'SUCCESS' }, duplicate: true };
+      }
+    }
+
     const createdSale = await prisma.$transaction(async (tx) => {
       const productIds = data.items.map(i => i.product_id);
 
-      // Validate every product up front so a bad ID becomes a readable 400
-      // (with the product named in later errors) instead of an FK violation.
+      // Validate products
       const products = await tx.product.findMany({
         where: { id: { in: productIds }, organization_id: organizationId, is_deleted: false },
-        select: { id: true, name: true, base_price: true }
+        select: { id: true, name: true, base_price: true, tax_rate: true }
       });
       const productsById = new Map(products.map(p => [p.id.toString(), p]));
       for (const item of data.items) {
@@ -585,8 +597,7 @@ export class SaleService {
         }
       }
 
-      // ONE query: every active batch for every product in the sale,
-      // dynamically ordered by allocation strategy (FIFO, LIFO, or default FEFO)
+      // Dynamic Batch ordering (FEFO/FIFO)
       const allBatches = await tx.productBatch.findMany({
         where: {
           organization_id: organizationId,
@@ -606,21 +617,15 @@ export class SaleService {
         batchesByProduct.get(key)!.push(b);
       }
 
-      // FIFO allocation in memory. Validates ALL stock before any write, so
-      // an insufficient-stock sale fails before touching the DB at all.
       type Allocation = { batch_id: bigint; product_id: bigint; quantity: number; unit_price: number };
       const allocations: Allocation[] = [];
       const finalRemainingByBatch = new Map<string, { id: bigint; remaining: number }>();
-      let totalAmount = 0;
+      let grossTotal = 0;
 
       for (const item of data.items) {
         const product = productsById.get(item.product_id.toString())!;
         let batches = batchesByProduct.get(item.product_id.toString()) ?? [];
 
-        // When the POS names a specific batch (the card the cashier tapped),
-        // that batch MUST be consumed first — otherwise the screen keeps
-        // showing the same "N left" while some other batch silently drains.
-        // Any overflow beyond it still falls through FIFO to the rest.
         if (item.batch_id !== undefined) {
           const chosen = batches.find(b => b.id === item.batch_id);
           if (!chosen || chosen.quantity_remaining <= 0) {
@@ -629,9 +634,6 @@ export class SaleService {
           batches = [chosen, ...batches.filter(b => b.id !== item.batch_id)];
         }
 
-        // Price precedence: caller-supplied price -> the chosen (else oldest)
-        // in-stock batch's selling price -> product base price. Lets the POS
-        // send just { product_id, quantity } and still charge the right amount.
         const unitPrice = item.unit_price
           ?? Number(batches.find(b => b.quantity_remaining > 0)?.selling_price ?? product.base_price);
 
@@ -657,62 +659,79 @@ export class SaleService {
           throw badRequest(`Insufficient stock for "${product.name}": short by ${remainingQtyToDeduct} (requested ${item.quantity})`);
         }
 
-        totalAmount += item.quantity * unitPrice;
+        grossTotal += item.quantity * unitPrice;
       }
 
-      // A CREDIT sale with no explicit payment means nothing was paid; every
-      // other method means paid in full unless the caller says otherwise.
-      const amountPaid = data.amount_paid !== undefined
-        ? data.amount_paid
-        : (data.payment_method === 'CREDIT' ? 0 : totalAmount);
-      if (amountPaid > totalAmount) {
-        throw badRequest(`amount_paid (${amountPaid}) cannot exceed the sale total (${totalAmount})`);
-      }
-      const remainingBalance = totalAmount - amountPaid;
+      const invoiceNumber = data.client_ref ? `INV-${data.client_ref}` : `INV-${Date.now()}`;
 
-      // Any unpaid balance must be carried by a known customer on credit.
-      if (data.payment_method === 'CREDIT' || remainingBalance > 0) {
-        if (!data.customer_id) {
-          throw badRequest('A customer is required for credit / partially-paid sales, so the remaining balance can be tracked');
-        }
-
-        const customer = await tx.customer.findFirst({
-          where: { id: data.customer_id, organization_id: organizationId, is_deleted: false }
-        });
-        if (!customer) throw badRequest(`Customer ${data.customer_id} was not found in this organization`);
-
-        const newBalance = Number(customer.current_balance) + remainingBalance;
-        if (Number(customer.credit_limit) > 0 && newBalance > Number(customer.credit_limit)) {
-          throw badRequest(`Credit limit exceeded for ${customer.name}: this sale would bring their balance to ${newBalance} (limit ${Number(customer.credit_limit)})`);
-        }
-
-        // Increase balance
-        await tx.customer.update({
-          where: { id: data.customer_id },
-          data: { current_balance: newBalance }
-        });
-      }
-
-      // Create Sale
+      // Create Sale with initial gross totals (need ID for discount consume)
       const sale = await tx.sale.create({
         data: {
           organization_id: organizationId,
           branch_id: data.branch_id,
           customer_id: data.customer_id,
-          total_amount: totalAmount,
-          amount_paid: amountPaid,
-          remaining_balance: remainingBalance,
+          cash_session_id: data.cash_session_id,
+          total_amount: grossTotal,
+          amount_paid: 0,
+          remaining_balance: 0,
           due_date: data.due_date,
           payment_method: data.payment_method as any,
           status: 'COMPLETED',
-          invoice_number: `INV-${Date.now()}`,
+          invoice_number: invoiceNumber,
           created_by_id: adminId
         }
       });
 
-      const now = new Date();
+      let discountAmount = 0;
+      if (data.discount_request_id) {
+        discountAmount = await DiscountService.consumeForSale(tx, organizationId, data.discount_request_id, sale.id);
+        if (discountAmount > grossTotal) throw badRequest('Approved discount exceeds sale total');
+      }
 
-      // ONE query: all sale items.
+      const netTotal = grossTotal - discountAmount;
+      
+      // Calculate VAT
+      const vatRate = ebmConfig.defaultVatRate;
+      const vatAmount = Number(((netTotal * vatRate) / (100 + vatRate)).toFixed(2));
+
+      // Calculate payments and credit
+      const amountPaid = data.amount_paid !== undefined
+        ? data.amount_paid
+        : (data.payment_method === 'CREDIT' ? 0 : netTotal);
+      if (amountPaid > netTotal) {
+        throw badRequest(`amount_paid (${amountPaid}) cannot exceed the sale total (${netTotal})`);
+      }
+      const remainingBalance = netTotal - amountPaid;
+
+      // Handle customer credit
+      if (data.payment_method === 'CREDIT' || remainingBalance > 0) {
+        if (!data.customer_id) {
+          if (data.payment_method === 'CREDIT') {
+            throw badRequest('A registered customer is required for credit sales');
+          }
+        } else {
+          const customer = await tx.customer.findFirst({
+            where: { id: data.customer_id, organization_id: organizationId, is_deleted: false }
+          });
+          if (!customer) throw badRequest(`Customer ${data.customer_id} was not found in this organization`);
+
+          const newBalance = Number(customer.current_balance) + remainingBalance;
+          const limit = Number(customer.credit_limit);
+          
+          if (data.payment_method === 'CREDIT') {
+            if (limit <= 0) throw badRequest('Credit denied: customer has no approved credit limit');
+            if (newBalance > limit) throw badRequest(`Credit limit exceeded: balance ${newBalance} would exceed limit ${limit}`);
+          }
+
+          await tx.customer.update({
+            where: { id: data.customer_id },
+            data: { current_balance: newBalance }
+          });
+        }
+      }
+
+      // Insert items
+      const now = new Date();
       await tx.saleItem.createMany({
         data: allocations.map(a => ({
           sale_id: sale.id,
@@ -725,24 +744,22 @@ export class SaleService {
         }))
       });
 
-      // ONE query: all inventory movements (DECREASE).
+      // Insert inventory movements
       await tx.inventoryMovement.createMany({
         data: allocations.map(a => ({
           organization_id: organizationId,
-          branch_id: data.branch_id,
+          branch_id: data.branch_id!,
           product_id: a.product_id,
           batch_id: a.batch_id,
           movement_type_id: 'SALES',
           type: 'SALES',
           quantity: a.quantity,
-          reference_id: sale.id.toString(), // Reason: Sale
+          reference_id: sale.id.toString(),
           created_by_id: adminId
         }))
       });
 
-      // ONE query: set-based decrement of every touched batch. Raw SQL
-      // because Prisma has no multi-row update-with-different-values;
-      // updated_at is set manually since raw bypasses @updatedAt.
+      // Set-based decrement of every touched batch (highly optimized)
       const touched = Array.from(finalRemainingByBatch.values());
       if (touched.length > 0) {
         const valuesSql = touched
@@ -758,18 +775,27 @@ export class SaleService {
         );
       }
 
-      // Cashbook records money actually received — amountPaid, not the sale
-      // total — so a partially-paid sale (or a credit sale with a down
-      // payment) doesn't overstate cash in.
+      // Update the Sale with final totals
+      const finalSale = await tx.sale.update({
+        where: { id: sale.id },
+        data: {
+           total_amount: netTotal,
+           discount_amount: discountAmount,
+           vat_amount: vatAmount,
+           amount_paid: amountPaid,
+           remaining_balance: remainingBalance,
+        }
+      });
+
       if (amountPaid > 0) {
         await tx.cashbook.create({
           data: {
             organization_id: organizationId,
-            branch_id: data.branch_id,
+            branch_id: data.branch_id!,
             transaction_type: 'IN',
-            category: 'SALES',
+            category: data.payment_method === 'CASH' ? 'SALES_CASH' : `SALES_${data.payment_method}`,
             amount: amountPaid,
-            description: `Sale #${sale.invoice_number}`,
+            description: `Sale ${invoiceNumber}`,
             reference_id: sale.id.toString(),
             created_by_id: adminId,
             date: new Date()
@@ -777,17 +803,118 @@ export class SaleService {
         });
       }
 
-      return sale;
-    }, { timeout: 20000, maxWait: 10000 });
+      await AuditService.log({
+        organization_id: organizationId,
+        branch_id: data.branch_id!,
+        user_id: adminId,
+        module: 'POS',
+        action: 'CREATE_SALE',
+        table_affected: 'Sale',
+        record_id: sale.id.toString(),
+        after: { total: netTotal, discount: discountAmount, vat: vatAmount, payment_method: data.payment_method, shift: data.cash_session_id?.toString() },
+      }, tx);
 
-    // Tell the customer their purchase was recorded (total / paid / balance).
-    // Fire-and-forget AFTER commit: a messaging outage must never fail a sale.
-    if (data.customer_id) {
-      const { CustomerNotifyService } = await import('@/services/customer-notify.service');
-      CustomerNotifyService.notifySale(organizationId, data.customer_id, createdSale).catch(() => {});
+      return { saleId: sale.id, invoiceNumber, netTotal, discountAmount, vatAmount, amountPaid, remainingBalance };
+    }, { timeout: 30000, maxWait: 10000 });
+
+    // MANDATORY EBM fiscalization (outside DB tx)
+    const provider = getEbmProvider();
+    const productNames = await prisma.product.findMany({
+      where: { id: { in: data.items.map(i => i.product_id) } },
+      select: { id: true, name: true, tax_rate: true },
+    });
+    const nameById = new Map(productNames.map(p => [p.id.toString(), p]));
+    const ebm = await provider.fiscalize({
+      organization_id: organizationId.toString(),
+      invoice_number: createdSale.invoiceNumber,
+      items: data.items.map(i => ({
+        name: nameById.get(i.product_id.toString())?.name || `Product ${i.product_id}`,
+        quantity: i.quantity,
+        unit_price: i.unit_price!,
+        tax_rate: Number(nameById.get(i.product_id.toString())?.tax_rate || ebmConfig.defaultVatRate),
+      })),
+      total_amount: createdSale.netTotal,
+      payment_method: data.payment_method as any,
+    });
+
+    await prisma.sale.update({
+      where: { id: createdSale.saleId },
+      data: {
+        ebm_invoice_number: ebm.ebm_invoice_number,
+        ebm_receipt_data: (ebm.receipt_data ?? undefined) as any,
+        ebm_status: ebm.success ? 'SUCCESS' : 'FAILED',
+      },
+    });
+
+    if (createdSale.netTotal >= LARGE_SALE_THRESHOLD) {
+      await AlertService.emit({
+        organization_id: organizationId,
+        branch_id: data.branch_id!,
+        type: 'LARGE_SALE',
+        severity: 'WARNING',
+        title: 'Large sale recorded',
+        message: `Sale ${createdSale.invoiceNumber} of ${createdSale.netTotal} was recorded.`,
+        target_role: 'Administrator',
+        data: { sale_id: createdSale.saleId.toString(), total: createdSale.netTotal },
+      });
     }
 
-    return createdSale;
+    await AlertService.runScan(organizationId).catch(() => {});
+
+    if (data.customer_id) {
+      const { CustomerNotifyService } = await import('@/services/customer-notify.service');
+      CustomerNotifyService.notifySale(organizationId, data.customer_id, {
+        invoice_number: createdSale.invoiceNumber,
+        total_amount: createdSale.netTotal,
+        amount_paid: createdSale.amountPaid,
+        remaining_balance: createdSale.remainingBalance,
+        due_date: data.due_date,
+      }).catch(() => {});
+    }
+
+    const full = await this.getSaleReceipt(organizationId, createdSale.saleId);
+    return { sale: full, ebm, duplicate: false };
+  }
+
+  static async getSaleReceipt(organizationId: bigint, saleId: bigint) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organization_id: organizationId },
+      include: {
+        items: { include: { Product: { select: { name: true, barcode: true, unit_of_measure: true } } } },
+        Customer: { select: { id: true, name: true, phone: true } },
+        Branch: { select: { id: true, name: true } },
+        User_Sale_created_by_idToUser: { select: { first_name: true, last_name: true } },
+      },
+    });
+    if (!sale) throw new Error('Sale not found');
+    return {
+      id: sale.id,
+      invoice_number: sale.invoice_number,
+      ebm_invoice_number: sale.ebm_invoice_number,
+      ebm_status: sale.ebm_status,
+      ebm_receipt_data: sale.ebm_receipt_data,
+      branch: sale.Branch,
+      cashier: sale.User_Sale_created_by_idToUser,
+      customer: sale.Customer,
+      payment_method: sale.payment_method,
+      cash_session_id: sale.cash_session_id,
+      subtotal: Number(sale.total_amount) + Number(sale.discount_amount),
+      discount_amount: sale.discount_amount,
+      vat_amount: sale.vat_amount,
+      total_amount: sale.total_amount,
+      amount_paid: sale.amount_paid,
+      remaining_balance: sale.remaining_balance,
+      timestamp: sale.timestamp,
+      items: sale.items.map((i) => ({
+        product_id: i.product_id,
+        name: i.Product?.name,
+        barcode: i.Product?.barcode,
+        uom: i.Product?.unit_of_measure,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        subtotal: i.subtotal,
+      })),
+    };
   }
 
   static async updateSale(id: bigint, organizationId: bigint, data: { status?: string }) {

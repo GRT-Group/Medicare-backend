@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveContext, requirePermission, requireFeature, toErrorResponse } from '@/lib/agrovet/context'
 import { normalizePaymentMethod, parseSaleItem, parseOptionalId, PAYMENT_METHODS_HINT } from '@/lib/sale-input'
-import { AgrovetSaleService } from '@/services/agrovet-sale.service'
+import { SaleService } from '@/services/sale.service'
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       // await requireFeature(ctx, 'credit_management')
     }
 
-    const result = await AgrovetSaleService.processSale(
+    const result = await SaleService.processSale(
       ctx.organizationId,
       {
         branch_id: branchId,
